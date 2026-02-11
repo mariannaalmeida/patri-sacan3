@@ -1,0 +1,9 @@
+# Cria arquivo .gitattributes com configurações
+@"
+* text=auto eol=lf
+*.{js,jsx,ts,tsx,json,md} text eol=lf
+"@ | Out-File -FilePath .gitattributes -Encoding utf8
+
+# Adiciona e commita
+git add .gitattributes
+git commit -m "Adiciona .gitattributes para normalizar line endings"
