@@ -1,282 +1,237 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Directory, File, Paths } from 'expo-file-system';
-import * as FileSystem from 'expo-file-system';
-import { Inventory, AssetItem, InventoryMetadata, InventoryStats } from './../types/types';
+import { Inventory, AssetItem, InventoryMetadata, InventoryStats, Result } from '../types/types';
+import { handleServiceError } from '../utils/error.utils';
+import { toISODate } from '../utils/dateUtils';
 
-// Definir as chaves para armazenamento no AsyncStorage
 const STORAGE_KEYS = {
-  INVENTORIES_INDEX: '@patriscan:inventories_index', // lista de nome de inventários
+  INVENTORIES_INDEX: '@patriscan:inventories_index',
   SETTINGS: '@patriscan:settings',
 } as const;
 
 export class StorageService {
-  // Propriedade estática para servir de molde
   private static readonly DEFAULT_METADATA: InventoryMetadata = {
     id: '0',
     name: 'Novo Inventário',
-    importDate: new Date().toISOString(),
+    importDate: toISODate(new Date()),
     totalItems: 0,
     status: 'active',
   };
 
-  // Helpers seguros
-  /**
-   * Faz parse seguro de JSON, retornando um valor padrão em caso de erro
-   * Evita quebrar a aplicação se algum arquivo estiver corrompido
-   */
+  // --- Helpers privados ---
+
   private static safeJSONParse<T>(data: string, fallback: T): T {
     try {
-      // Tenta transformar a string em objeto
       return JSON.parse(data);
     } catch {
-      // Se a string for inválida (ex: "{" mal formatado),
-      // ele cai aqui e retorna o 'fallback' (valor padrão)
       return fallback;
     }
-    /**
-     * Retorna o diretório raiz onde todos os inventários são armazenados.
-     * Usa Paths.document que é diretório privado do app (seguro e  persistente)
-     */
   }
+
+  private static safeJSONParseOrThrow<T>(data: string, context: string): T {
+    try {
+      return JSON.parse(data);
+    } catch {
+      throw new Error(`Falha ao parsear JSON: ${context}`);
+    }
+  }
+
   private static getRootDirectory(): Directory {
     return new Directory(Paths.document, 'inventories');
   }
-
-  /**
-   * Retorna o diretório de um inventário específico, como nome sanitizado
-   */
 
   private static getInventoryDirectory(name: string): Directory {
     const safeName = this.getSafeFileName(name);
     return new Directory(this.getRootDirectory(), safeName);
   }
 
-  // Definir as chaves para armazenamento no AsyncStorage
   private static getSafeFileName(name: string): string {
     return name
-      .normalize('NFD') // decompõe caracteres acentuados
-      .replace(/[\u0300-\u036f]/g, '') // remove diacríticos (acentos)
-      .replace(/[^a-z0-9]/gi, '_') // substitui qualquer caractere não alfanumérico por _ FIX: flag 'i' adicionada para pegar maiúsculas também
-      .toLowerCase(); // Converte para minúsculas
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]/gi, '_')
+      .toLowerCase();
   }
 
-  // --- 1. Inicialização ---
-  /**
-   * Garante que o diretório raiz ()
-   */
-  static async ensureDirectoryExists(): Promise<void> {
-    try {
-      const root = this.getRootDirectory();
-      if (!root.exists) {
-        root.create({ intermediates: true, idempotent: true });
-      }
-    } catch (error: any) {
-      console.warn('Erro ao garantir diretório raiz', error);
+  private static async ensureDirectoryExists(): Promise<void> {
+    const root = this.getRootDirectory();
+    if (!root.exists) {
+      root.create({ intermediates: true, idempotent: true });
     }
   }
 
-  // --- 2. Listar inventários ---
   /**
-   * Retorna a lista de nomes de inventários válidos
-   * Faz reconciliação entre o índice no AsyncStorage e as pastas físicas
+   * Type guard para verificar se um item é do tipo "found"
    */
-  static async getInventories(): Promise<string[]> {
-    try {
-      // 1. Lê o índice do AsyncStorage
+  private static isFoundItem(
+    item: AssetItem
+  ): item is AssetItem & { found: true; scanDate: string } {
+    return item.found === true;
+  }
 
+  // --- Métodos públicos ---
+
+  static async getInventories(): Promise<Result<string[]>> {
+    return handleServiceError(async () => {
+      await this.ensureDirectoryExists();
       const raw = await AsyncStorage.getItem(STORAGE_KEYS.INVENTORIES_INDEX);
       const index = raw ? this.safeJSONParse<string[]>(raw, []) : [];
-
-      // 2. Garante que o diretório raiz exista (para evitar erro ao listar)
-      await this.ensureDirectoryExists();
       const root = this.getRootDirectory();
-
-      // 3. Lista as pastas existentes no disco
-
       const folders = root
-        .list() // Retorna array de File| Directory
-        .filter((f): f is Directory => f instanceof Directory) // Filtra apenas os diretórios
-        .map((d) => d.name); // Extrai o nome da pasta
+        .list()
+        .filter((f): f is Directory => f instanceof Directory)
+        .map((d) => d.name);
 
-      // 4. Reconcilia: mantém no índice apenas nomes que têm pasta correspondente
-      const valid = index.filter((name) => {
-        return folders.includes(this.getSafeFileName(name));
-      });
-
-      // 5. Se o índice mudou (por exemplo, pasta excluída manualmente), atualiza o AsyscStorage
+      const valid = index.filter((name) => folders.includes(this.getSafeFileName(name)));
 
       if (valid.length !== index.length) {
         await AsyncStorage.setItem(STORAGE_KEYS.INVENTORIES_INDEX, JSON.stringify(valid));
       }
-
       return valid;
-    } catch (error) {
-      console.error('Erro ao listar inventários', error);
-      return [];
-    }
+    }, 'STORAGE_READ_FAILED');
   }
 
-  // --- 3. Salvar inventário ---
-
-  /**
-   * Salva um inventário completo no disco.
-   * Cria a pasta do inventário se não existir, e escreve os três arquivos:
-   * - items.json: lista completa de itens
-   * - scanned.json: lista de itens já escaneados
-   * - metadata.json: metadados do inventário
-   */
-
-  static async saveInventory(inventory: Inventory): Promise<boolean> {
-    try {
-      // 1. Obtém o diretório do inventário (cria se necessário)
+  static async saveInventory(inventory: Inventory): Promise<Result<void>> {
+    return handleServiceError(async () => {
       const dir = this.getInventoryDirectory(inventory.metadata.name);
-
       dir.create({ intermediates: true, idempotent: true });
 
-      // 2. Cria referências para três arquivos
-
       const itemsFile = new File(dir, 'items.json');
-      const scannedFile = new File(dir, 'scanned.json');
       const metadataFile = new File(dir, 'metadata.json');
-
-      // 3. Escreve os três arquivos em paralelo para melhor performance
 
       await Promise.all([
         itemsFile.write(JSON.stringify(inventory.items)),
-        scannedFile.write(JSON.stringify(inventory.scanned)),
         metadataFile.write(JSON.stringify(inventory.metadata)),
       ]);
 
-      // 4. Atualiza o índice no AsyncStorage se for um novo inventário
-
-      const list = await this.getInventories();
+      const listResult = await this.getInventories();
+      if (!listResult.ok) throw new Error(listResult.error.message);
+      const list = listResult.value;
       if (!list.includes(inventory.metadata.name)) {
         await AsyncStorage.setItem(
           STORAGE_KEYS.INVENTORIES_INDEX,
           JSON.stringify([...list, inventory.metadata.name])
         );
       }
-      return true;
-    } catch (error) {
-      console.error('Erro ao salvar o inventário:', error);
-      return false;
-    }
+    }, 'STORAGE_WRITE_FAILED');
   }
 
-  // --- 4. Carregar inventário ---
-  /**
-   * Carrega um inventário completo do disco.
-   * Retorna null se o inventário não existir ou se algum arquivo estiver corrompido.
-   */
-  static async loadInventory(name: string): Promise<Inventory | null> {
-    try {
+  static async loadInventory(name: string): Promise<Result<Inventory>> {
+    return handleServiceError(async () => {
       const dir = this.getInventoryDirectory(name);
-
-      // Referências para os arquivos
       const itemsFile = new File(dir, 'items.json');
-      const scannedFile = new File(dir, 'scanned.json');
       const metadataFile = new File(dir, 'metadata.json');
 
-      // Lê os três arquivos em paralelo
-      const [itemsRaw, scannedRaw, metadataRaw] = await Promise.all([
-        itemsFile.text(),
-        scannedFile.text(),
-        metadataFile.text(),
-      ]);
-
-      // Converter JSON com fallback seguro
-      return {
-        items: this.safeJSONParse(itemsRaw, []), // Se estiver corrompido, ele retorna uma lista vazia e o App segue rodando.
-        scanned: this.safeJSONParse(scannedRaw, []),
-        metadata: this.safeJSONParse(metadataRaw, this.DEFAULT_METADATA),
-      };
-    } catch (error) {
-      console.error(`Erro ao carregar inventário "${name}":`, error);
-      return null;
-    }
-  }
-
-  // --- 5. Excluir inventário ---
-  /**
-   * Exclui um inventário do disco e remove do índice.
-   */
-  static async deleteInventory(name: string): Promise<boolean> {
-    try {
-      const dir = this.getInventoryDirectory(name);
-      if (dir.exists) {
-        dir.delete(); // Exclui a pasta e todo seu conteúdo
+      if (!itemsFile.exists || !metadataFile.exists) {
+        throw new Error(`Arquivos do inventário "${name}" não encontrados.`);
       }
 
-      // Remove do índice
+      const [itemsRaw, metadataRaw] = await Promise.all([itemsFile.text(), metadataFile.text()]);
 
-      const list = await this.getInventories();
-      const updated = list.filter((item) => item !== name);
+      const items = this.safeJSONParse<AssetItem[]>(itemsRaw, []);
+      const metadata = this.safeJSONParseOrThrow<InventoryMetadata>(
+        metadataRaw,
+        `metadados do inventário ${name}`
+      );
+
+      return { items, metadata };
+    }, 'STORAGE_READ_FAILED');
+  }
+
+  static async deleteInventory(name: string): Promise<Result<void>> {
+    return handleServiceError(async () => {
+      const dir = this.getInventoryDirectory(name);
+      if (dir.exists) dir.delete();
+
+      const listResult = await this.getInventories();
+      if (!listResult.ok) throw new Error(listResult.error.message);
+      const updated = listResult.value.filter((item) => item !== name);
       await AsyncStorage.setItem(STORAGE_KEYS.INVENTORIES_INDEX, JSON.stringify(updated));
-
-      return true;
-    } catch (error) {
-      console.error(`Erro ao excluir inventário ${name}:`, error);
-      return false;
-    }
+    }, 'STORAGE_DELETE_FAILED');
   }
 
-  // --- 6. Atualizar itens escaneados ---
-  /**
-   * Atualiza apenas o arquivo scanned.json de um inventário.
-   * Útil durante o escaneamento, evitando reescrever items.json e metadata.json.
-   */
-  static async updateScannedItems(name: string, scanned: AssetItem[]): Promise<boolean> {
-    try {
-      const dir = this.getInventoryDirectory(name);
-      if (!dir.exists) return false;
+  static async updateItemFoundStatus(
+    inventoryName: string,
+    itemCode: string,
+    found: boolean,
+    scanDate?: Date | string
+  ): Promise<Result<void>> {
+    return handleServiceError(async () => {
+      const loadResult = await this.loadInventory(inventoryName);
+      if (!loadResult.ok) throw new Error(loadResult.error.message);
+      const inventory = loadResult.value;
 
-      const file = new File(dir, 'scanned.json');
-      file.write(JSON.stringify(scanned));
+      const index = inventory.items.findIndex((i) => i.code === itemCode);
+      if (index === -1) {
+        throw new Error(`Item com código "${itemCode}" não encontrado`);
+      }
 
-      return true;
-    } catch (error) {
-      console.error('Erro ao atualizar itens escaneados', error);
-      return false;
-    }
+      const originalItem = inventory.items[index];
+      let updatedItem: AssetItem;
+
+      if (found) {
+        const finalScanDate = scanDate ? toISODate(new Date(scanDate)) : toISODate(new Date());
+        if (this.isFoundItem(originalItem)) {
+          // Já encontrado: atualiza apenas a data
+          updatedItem = { ...originalItem, scanDate: finalScanDate };
+        } else {
+          // Não encontrado → marcado como encontrado
+          updatedItem = {
+            ...originalItem,
+            found: true,
+            scanDate: finalScanDate,
+          };
+        }
+      } else {
+        if (this.isFoundItem(originalItem)) {
+          // Encontrado → não encontrado: remove scanDate
+          const { scanDate: _, ...base } = originalItem;
+          updatedItem = { ...base, found: false };
+        } else {
+          updatedItem = originalItem;
+        }
+      }
+
+      inventory.items[index] = updatedItem;
+
+      const saveResult = await this.saveInventory(inventory);
+      if (!saveResult.ok) throw new Error(saveResult.error.message);
+    }, 'STORAGE_WRITE_FAILED');
   }
 
-  /**
-   * Retorna estatísticas rápidas de um inventário sem carregar a lista completa de itens.
-   * Apenas lê metadata.json e scanned.json, o que é muito mais eficiente para inventários grandes.
-   */
-  static async getInventoryStats(name: string): Promise<InventoryStats | null> {
-    try {
-      const dir = this.getInventoryDirectory(name);
-      if (!dir.exists) return null;
+  static async getInventoryStats(name: string): Promise<Result<InventoryStats>> {
+    return handleServiceError(
+      async () => {
+        const dir = this.getInventoryDirectory(name);
+        if (!dir.exists) throw new Error(`Inventário "${name}" não encontrado`);
 
-      const metadataFile = new File(dir, 'metadata.json');
-      const scannedFile = new File(dir, 'scanned.json');
+        const metadataFile = new File(dir, 'metadata.json');
+        const itemsFile = new File(dir, 'items.json');
 
-      if (!metadataFile.exists || !scannedFile.exists) return null;
+        if (!metadataFile.exists || !itemsFile.exists) {
+          throw new Error('Arquivos de metadados ou itens ausentes');
+        }
 
-      // Lê apenas os dois arquivos necessários
-      const [metadataRaw, scannedRaw] = await Promise.all([
-        metadataFile.text(),
-        scannedFile.text(),
-      ]);
+        const [metadataRaw, itemsRaw] = await Promise.all([metadataFile.text(), itemsFile.text()]);
 
-      const metadata = this.safeJSONParse<InventoryMetadata | null>(metadataRaw, null);
-      const scanned = this.safeJSONParse<AssetItem[]>(scannedRaw, []);
+        const metadata = this.safeJSONParseOrThrow<InventoryMetadata>(
+          metadataRaw,
+          `metadados do inventário ${name}`
+        );
+        const items = this.safeJSONParse<AssetItem[]>(itemsRaw, []);
 
-      if (!metadata) return null;
+        const total = metadata.totalItems;
+        const scannedCount = items.filter((i) => i.found).length;
 
-      const total = metadata.totalItems || 0;
-      const scannedCount = scanned.length;
-
-      return {
-        totalItems: total,
-        scannedItems: scannedCount,
-        progress: total > 0 ? Math.round((scannedCount / total) * 100) : 0,
-        lastModified: metadata.importDate ?? new Date().toISOString(),
-      };
-    } catch (error) {
-      console.error('Erro ao obter estatísticas:', error);
-      return null;
-    }
+        return {
+          totalItems: total,
+          scannedItems: scannedCount,
+          progress: total > 0 ? Math.round((scannedCount / total) * 100) : 0,
+          lastModified: metadata.importDate,
+        };
+      },
+      'STORAGE_READ_FAILED',
+      { inventoryName: name }
+    );
   }
 }

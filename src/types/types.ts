@@ -2,23 +2,35 @@
 // ========================
 
 // ------------- DOMINIO --------------------------------
-export interface AssetItem {
-  id: string;
+
+
+export type InventoryId = string;
+export type AssetId = string;
+
+// Sugestão de tipagem estrita para o status (adicione os que fizerem sentido pro seu negócio)
+export type AssetStatus = 'good' | 'damaged' | 'missing' | 'in_repair' | string;
+
+
+  export  type AssetItemBase = {
+  id: AssetId;
   code: string;
   description: string;
   department: string;
   location: string;
-  status: string;
-  value?: string;
-  found?: boolean;
-  importDate?: string;
-  scanDate?: string;
-}
+  status: AssetStatus;
+  value?: number;
+  importDate?: ISODateString;
+};
+
+ export type AssetItem = 
+  | (AssetItemBase & { found: true; scanDate: ISODateString })
+  | (AssetItemBase & { found: false; scanDate?: never });
+
 
 export interface InventoryMetadata {
-  id: string;
+  id: InventoryId;
   name: string;
-  importDate: string;
+  importDate: ISODateString;
   totalItems: number;
   status: 'active' | 'completed' | 'archived';
 }
@@ -26,16 +38,26 @@ export interface InventoryMetadata {
 export interface Inventory {
   metadata: InventoryMetadata;
   items: AssetItem[];
-  scanned: AssetItem[];
+  schema?: InventorySchema;
+  stats?: InventoryStats;
 }
 
 // --- SCANNER ------
 export interface ScanResult {
-  type: 'success' | 'error' | 'warning';
+  type: 'success' | 'error' | 'warning' | 'info';
   message: string;
   item?: AssetItem;
   code?: string;
   timestamp: string;
+  alreadyScanned?: boolean;
+}
+
+export interface ScanSession {
+  id: string;
+  inventoryId: string;
+  startedAt: string;
+  endedAt?: string;
+  scannedCodes: string[];
 }
 
 // --- SETTINGS ----
@@ -48,11 +70,11 @@ export interface AppSettings {
   theme: ThemeMode;
 }
 
-// --- Storage ----
+// --- STORAGE ----
 export interface StorageStats {
   totalSize: number;
   inventoryCount: number;
-  lastModified: string;
+  lastModified: ISODateString;
   freeSpace?: number;
 }
 
@@ -63,46 +85,29 @@ export interface BackupInfo {
   inventoryCount: number;
 }
 
-export interface StorageError {
-  code: string;
-  message: string;
-  details?: any;
-}
-
 // ------ CSV / IMPORT ----
 
-// FIX: Corrigido o typo "ColumnMaping" -> "ColumnMapping"
-// O alias abaixo garante retrocompatibilidade com código antigo que usar o nome errado
 export interface ColumnMapping {
   csvHeader: string;
-  mappedField?: keyof AssetItem;
-  confidence: number; // 0-100
+  mappedField?: keyof AssetItemBase;
+  confidence: number;
 }
 
 export interface CSVValidationResult {
   validRows: number;
   errorRows: number;
-  errors: {
-    row: number;
-    field: string;
-    message: string;
-    value?: string;
-  }[];
-  warnings: {
-    row: number;
-    field: string;
-    message: string;
-    value?: string;
-  }[];
+  errors: { row: number; field: string; message: string; value?: string; }[];
+  warnings: { row: number; field: string; message: string; value?: string; }[];
 }
 
 export interface ColumnMappingScreenProps {
-  csvData: any[];
   headers: string[];
-  onMappingComplete: (mapping: Record<string, string>) => void;
+  rawData: Record<string, string | number | boolean | null>[];
+  inventoryName: string;
+  onComplete: (mapping: Record<string, keyof AssetItem>) => void;
 }
 
-// --- Dynamic Schema ---
+// ---  Dynamic Schema ---
 export type FieldType = 'text' | 'number' | 'date' | 'currency' | 'boolean';
 
 export interface FieldDefinition {
@@ -111,7 +116,7 @@ export interface FieldDefinition {
   type: FieldType;
   required: boolean;
   fixed?: boolean;
-  defaultValue?: any;
+  defaultValue?: string | number | boolean | null; 
   options?: string[];
   validation?: {
     min?: number;
@@ -130,88 +135,39 @@ export interface InventorySchema {
 export interface InventoryStats {
   totalItems: number;
   scannedItems: number;
-  lastModified?: string;
+  lastModified?: ISODateString;
   progress: number;
 }
 
-// --- Navegação ---
+// --- Adição de Metadados de Paginação  ---
+export interface PaginatedResult<T> {
+  items: T[];
+  total: number;
+  hasMore: boolean;
+  nextCursor?: string;
+}
 
+// --- Date ---
 /**
- * Contrato único de navegação do app.
- *
- * Antes cada tela definia seu próprio RootStackParamList local,
- * o que criava risco de divergência silenciosa entre telas:
- * uma tela podia navegar passando { inventory } enquanto
- * a tela de destino esperava { inventoryName }.
- *
- * Agora todas as telas importam daqui:
- *   import { RootStackParamList } from '../types/types';
- *   const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+ * Representa uma data serializada no formato ISO 8601.
+ * Transformado em Branded Type para maior segurança.
  */
+export type ISODateString = string & { readonly __brand: unique symbol };
+
+// --- Navegation ---
 export type RootStackParamList = {
   Home: undefined;
   InventoryList: undefined;
   InventoryDetail: { inventoryName: string };
   CreateInventory: undefined;
-  Scanner: { inventory: Inventory };
+  Scanner: { inventoryId: string };
   Reports: undefined;
   ReportDetail: { inventoryName: string };
 };
 
-// --- Exportação ---
+// --- Export ---
+export type ExportFormat = 'csv_found' | 'csv_pending' | 'csv_full' | 'pdf' | 'xlsx' | 'json';
 
-/**
- * Formatos de exportação disponíveis no ExportActionSheet e nos serviços.
- *
- * Antes estava definido dentro de src/components/inventory/index.tsx,
- * o que obrigava serviços (CSVExportService, ReportService) a importar
- * de uma camada de componente — violando a separação de responsabilidades.
- *
- * Agora o fluxo é:
- *   types.ts (define) → services (implementam) → components (consomem)
- */
-export type ExportFormat = 'csv_found' | 'csv_pending' | 'csv_full' | 'pdf';
-
-// --- Erros de aplicação ---
-
-/**
- * Tipo de erro padronizado para todos os serviços.
- *
- * Problema anterior: serviços sinalizavam falha retornando boolean (false)
- * ou null, sem nenhuma informação sobre o que deu errado. Isso forçava
- * as telas a exibir mensagens genéricas como "Falha ao salvar. Tente novamente."
- *
- * Com AppError, o serviço pode comunicar:
- *   - code:    identificador da categoria do erro (para lógica de retry ou fallback)
- *   - message: texto legível para exibir ao usuário
- *   - cause:   o erro original para logging/debugging
- *   - context: dados adicionais para diagnóstico (ex: nome do arquivo, linha do CSV)
- *
- * Uso nos serviços — padrão Result<T>:
- *   type Result<T> = { ok: true; value: T } | { ok: false; error: AppError };
- *
- * Exemplo:
- *   static async saveInventory(inv: Inventory): Promise<Result<void>> {
- *     try {
- *       ...
- *       return { ok: true, value: undefined };
- *     } catch (e) {
- *       return { ok: false, error: {
- *         code: 'STORAGE_WRITE_FAILED',
- *         message: 'Não foi possível salvar o inventário.',
- *         cause: e,
- *         context: { inventoryName: inv.metadata.name },
- *       }};
- *     }
- *   }
- *
- * Nas telas:
- *   const result = await StorageService.saveInventory(inv);
- *   if (!result.ok) {
- *     Alert.alert('Erro', result.error.message);
- *     return;
- *   }
- */
 export interface AppError {
   /** Identificador da categoria do erro. Use SNAKE_UPPER_CASE. */
   code: AppErrorCode;
@@ -238,6 +194,9 @@ export type AppErrorCode =
   | 'IMPORT_INVALID_FILE'
   | 'IMPORT_PARSE_FAILED'
   | 'IMPORT_MAPPING_INCOMPLETE'
+  | 'IMPORT_NO_CODE_COLUMN'
+  | 'IMPORT_DUPLICATE_CODE'
+  | 'IMPORT_VALIDATION_FAILED'
   // Scanner
   | 'SCAN_INVALID_CODE'
   | 'SCAN_CONFIRM_FAILED'
@@ -277,6 +236,4 @@ export function unknownToAppError(cause: unknown, code: AppErrorCode = 'UNKNOWN'
  */
 export type Result<T> = { ok: true; value: T } | { ok: false; error: AppError };
 
-/** Atalhos para construir Results sem boilerplate. */
-export const Ok = <T>(value: T): Result<T> => ({ ok: true, value });
-export const Err = (error: AppError): Result<never> => ({ ok: false, error });
+
