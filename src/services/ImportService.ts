@@ -4,19 +4,20 @@ import Papa from 'papaparse';
 import {
   AssetItem,
   AssetItemBase,
+  AssetStatus,
   ColumnMapping,
   CSVValidationResult,
   Inventory,
+  MappableField,
   Result,
 } from '../types/types';
-import { StorageService } from './StorageService';
-import { handleServiceError } from '../utils/error.utils';
 import { toISODate } from '../utils/dateUtils';
+import { handleServiceError } from '../utils/errorUtils';
+import { StorageService } from './StorageService';
 
 export class ImportService {
   /**
    * 1. Selecionar o arquivo CSV do dispositivo
-   
    */
   static async pickCSVFile(): Promise<Result<DocumentPicker.DocumentPickerResult | null>> {
     return handleServiceError(async () => {
@@ -30,7 +31,6 @@ export class ImportService {
 
   /**
    * 2. Ler e parsear o conteúdo do CSV
-  
    */
   static async parseCSVFile(uri: string): Promise<
     Result<{
@@ -71,7 +71,7 @@ export class ImportService {
    * 3. Sugerir mapeamento de colunas baseado em heurística
    */
   static suggestColumnMapping(headers: string[]): ColumnMapping[] {
-    const fieldKeywords: Partial<Record<keyof AssetItemBase, string[]>> = {
+    const fieldKeywords: Partial<Record<MappableField, string[]>> = {
       code: ['código', 'codigo', 'code', 'patrimônio', 'patrimonio', 'tombo', 'id', 'registro'],
       description: ['descrição', 'descricao', 'description', 'nome', 'item', 'produto', 'bem'],
       department: ['departamento', 'departament', 'setor', 'divisão', 'divisao', 'unidade'],
@@ -79,30 +79,29 @@ export class ImportService {
       status: ['status', 'estado', 'situação', 'situacao', 'condição', 'condicao'],
       value: ['valor', 'value', 'preço', 'preco', 'custo', 'montante'],
     };
-    // found, importDate, scanDate não são mapeados a partir do CSV
 
     return headers.map((header) => {
       const lowerHeader = header.toLowerCase().trim();
-      let bestField: keyof AssetItemBase | undefined;
+      let bestField: MappableField | undefined;
       let bestConfidence = 0;
 
       for (const [field, keywords] of Object.entries(fieldKeywords)) {
         if (!keywords || keywords.length === 0) continue;
 
         if (keywords.some((kw) => lowerHeader === kw)) {
-          bestField = field as keyof AssetItemBase;
+          bestField = field as MappableField;
           bestConfidence = 100;
           break;
         }
         if (keywords.some((kw) => lowerHeader.includes(kw)) && bestConfidence < 80) {
-          bestField = field as keyof AssetItemBase;
+          bestField = field as MappableField;
           bestConfidence = 80;
         }
         if (bestConfidence < 60) {
           const headerWords = lowerHeader.split(/[\s_\-]+/);
           for (const word of headerWords) {
             if (keywords.some((kw) => kw.includes(word) || word.includes(kw))) {
-              bestField = field as keyof AssetItemBase;
+              bestField = field as MappableField;
               bestConfidence = 60;
               break;
             }
@@ -123,7 +122,7 @@ export class ImportService {
    */
   static validateCSVData(
     data: Record<string, string>[],
-    mapping: Record<string, keyof AssetItemBase>
+    mapping: Record<string, MappableField>
   ): CSVValidationResult {
     const result: CSVValidationResult = {
       validRows: 0,
@@ -209,21 +208,49 @@ export class ImportService {
   }
 
   /**
+   * ✅ Converter string de status para AssetStatus válido
+   */
+  private static normalizeStatus(status: string): AssetStatus {
+    const statusMap: Record<string, AssetStatus> = {
+      bom: 'good',
+      good: 'good',
+      ótimo: 'good',
+      otimo: 'good',
+      excelente: 'good',
+      danificado: 'damaged',
+      damaged: 'damaged',
+      'danificado parcial': 'damaged',
+      avariado: 'damaged',
+      extraviado: 'missing',
+      missing: 'missing',
+      perdido: 'missing',
+      desaparecido: 'missing',
+      'em manutenção': 'in_repair',
+      'em manutencao': 'in_repair',
+      in_repair: 'in_repair',
+      reparo: 'in_repair',
+      conserto: 'in_repair',
+    };
+
+    const normalized = status.toLowerCase().trim();
+    return statusMap[normalized] || 'good'; // ✅ default para 'good'
+  }
+
+  /**
    * 5. Converter dados do CSV para AssetItem (com found: false inicialmente)
    */
   static convertToAssetItems(
     data: Record<string, string>[],
-    mapping: Record<string, keyof AssetItemBase>
+    mapping: Record<string, MappableField>
   ): AssetItem[] {
     const timestamp = Date.now();
     return data.map((row, index) => {
       const base: AssetItemBase = {
-        id: `asset-${timestamp}-${index}`,
         code: '',
         description: '',
         department: '',
         location: '',
-        status: 'Pendente',
+        status: 'good', // ✅ Status padrão válido
         value: undefined,
         importDate: undefined,
       };
@@ -239,7 +266,7 @@ export class ImportService {
               if (!isNaN(num)) base.value = num;
               break;
             case 'status':
-              base.status = strValue;
+              base.status = this.normalizeStatus(strValue); // ✅ Normaliza status
               break;
             default:
               // @ts-ignore - atribuição dinâmica segura
@@ -262,7 +289,7 @@ export class ImportService {
     return handleServiceError(async () => {
       const inventory: Inventory = {
         metadata: {
-          id: `inv-${Date.now()}`,
+          id: StorageService.generateInventoryId(), // ✅ Usar o gerador de ID
           name,
           importDate: toISODate(new Date()),
           totalItems: items.length,

@@ -1,33 +1,26 @@
-import React, { useState, useCallback } from 'react';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import React, { useCallback, useState } from 'react';
 import {
-  View,
-  FlatList,
-  TouchableOpacity,
+  ActivityIndicator,
   Alert,
+  FlatList,
   RefreshControl,
-  Platform,
   StatusBar,
   Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { StorageService } from '../services/StorageService';
-import { InventoryStats } from '../types/types';
-import { commonStyles, inventoryListStyles } from '../styles/theme';
-
-// ─── Navegação ────────────────────────────────────────────────────────────────
-
-type RootStackParamList = {
-  InventoryList: undefined;
-  InventoryDetail: { inventoryName: string };
-  CreateInventory: undefined;
-};
+import { colors, commonStyles, inventoryListStyles } from '../styles/theme';
+import { InventoryStats, RootStackParamList } from '../types/types';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
 // ─── Tipos internos ───────────────────────────────────────────────────────────
 
 interface InventoryRow {
+  id: string;
   name: string;
   stats: InventoryStats | null;
 }
@@ -45,20 +38,35 @@ export const InventoryListScreen = () => {
   const loadAllData = useCallback(async (silent = false) => {
     if (!silent) setIsLoading(true);
     try {
-      const namesResult = await StorageService.getInventories();
-      if (!namesResult.ok) throw new Error(namesResult.error.message);
-      const names = namesResult.value;
+      const idsResult = await StorageService.getInventories();
+      if (!idsResult.ok) throw new Error(idsResult.error.message);
+      const ids = idsResult.value;
 
       const dataWithStats = await Promise.all(
-        names.map(async (name) => {
-          const statsResult = await StorageService.getInventoryStats(name);
-          if (statsResult.ok) {
-            return { name, stats: statsResult.value };
-          } else {
-            console.warn(`Erro ao carregar estatísticas de ${name}:`, statsResult.error.message);
-            return { name, stats: null };
+        ids.map(async (id) => {
+          const inventoryResult = await StorageService.loadInventory(id);
+          if (!inventoryResult.ok) {
+            console.warn(`Erro ao carregar inventário ${id}:`, inventoryResult.error.message);
+            return { id, name: id, stats: null };
           }
-        }),
+
+          const inventory = inventoryResult.value;
+          const statsResult = await StorageService.getInventoryStats(id);
+
+          if (statsResult.ok) {
+            return {
+              id,
+              name: inventory.metadata.name,
+              stats: statsResult.value,
+            };
+          } else {
+            console.warn(
+              `Erro ao carregar estatísticas de ${inventory.metadata.name}:`,
+              statsResult.error.message
+            );
+            return { id, name: inventory.metadata.name, stats: null };
+          }
+        })
       );
       setInventories(dataWithStats);
     } catch (error) {
@@ -73,7 +81,7 @@ export const InventoryListScreen = () => {
   useFocusEffect(
     useCallback(() => {
       loadAllData();
-    }, [loadAllData]),
+    }, [loadAllData])
   );
 
   const handleRefresh = useCallback(() => {
@@ -81,41 +89,72 @@ export const InventoryListScreen = () => {
     loadAllData(true);
   }, [loadAllData]);
 
-  // ─── Delete ────────────────────────────────────────────────────────────────
-
-  const handleDelete = useCallback((name: string) => {
-    Alert.alert(
-      'Excluir inventário',
-      `Deseja realmente apagar "${name}"? Esta ação não pode ser desfeita.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Excluir',
-          style: 'destructive',
-          onPress: async () => {
-            const result = await StorageService.deleteInventory(name);
-            if (result.ok) {
-              loadAllData(true);
-            } else {
-              Alert.alert('Erro', result.error.message);
-            }
+  // ✅ Delete usando ID
+  const handleDelete = useCallback(
+    (id: string, name: string) => {
+      Alert.alert(
+        'Excluir inventário',
+        `Deseja realmente apagar "${name}"? Esta ação não pode ser desfeita.`,
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          {
+            text: 'Excluir',
+            style: 'destructive',
+            onPress: async () => {
+              const result = await StorageService.deleteInventory(id);
+              if (result.ok) {
+                loadAllData(true);
+              } else {
+                Alert.alert('Erro', result.error.message);
+              }
+            },
           },
-        },
-      ],
-    );
-  }, [loadAllData]);
+        ]
+      );
+    },
+    [loadAllData]
+  );
 
-  // ─── Renderização do item ──────────────────────────────────────────────────
+  // ✅ Navegações
+  const handleGoBack = () => {
+    navigation.goBack();
+  };
 
+  const handleGoToHome = () => {
+    navigation.navigate('Home');
+  };
+
+  const handleGoToImportCSV = () => {
+    navigation.navigate('ImportInventory');
+  };
+
+  const handleGoToManualInventory = () => {
+    navigation.navigate('ManualInventory');
+  };
+
+  const handleGoToReports = () => {
+    navigation.navigate('Reports');
+  };
+
+  const handleGoToSettings = () => {
+    navigation.navigate('Settings');
+  };
+
+  // ✅ Renderização do item usando ID
   const renderItem = useCallback(
     ({ item }: { item: InventoryRow }) => (
       <InventoryCard
         item={item}
-        onPress={() => navigation.navigate('InventoryDetail', { inventoryName: item.name })}
-        onDelete={() => handleDelete(item.name)}
+        onPress={() =>
+          navigation.navigate('InventoryDetail', {
+            inventoryId: item.id,
+            inventoryName: item.name,
+          })
+        }
+        onDelete={() => handleDelete(item.id, item.name)}
       />
     ),
-    [navigation, handleDelete],
+    [navigation, handleDelete]
   );
 
   // ─── Loading state ─────────────────────────────────────────────────────────
@@ -123,7 +162,8 @@ export const InventoryListScreen = () => {
   if (isLoading) {
     return (
       <View style={commonStyles.loadingContainer}>
-        <StatusBar barStyle="light-content" backgroundColor="#0A0A0F" />
+        <StatusBar barStyle="light-content" backgroundColor={colors.bg} />
+        <ActivityIndicator color={colors.accent} size="large" />
         <Text style={commonStyles.loadingText}>Carregando inventários…</Text>
       </View>
     );
@@ -133,22 +173,36 @@ export const InventoryListScreen = () => {
 
   return (
     <View style={commonStyles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0A0A0F" />
+      <StatusBar barStyle="light-content" backgroundColor={colors.bg} />
 
+      {/* Header com botão de voltar e ações */}
       <View style={inventoryListStyles.header}>
-        <View>
-          <Text style={inventoryListStyles.headerTitle}>PatriScan</Text>
+        <TouchableOpacity onPress={handleGoBack} style={inventoryListStyles.backBtn}>
+          <Text style={inventoryListStyles.backBtnText}>←</Text>
+        </TouchableOpacity>
+
+        <View style={inventoryListStyles.headerCenter}>
+          <Text style={inventoryListStyles.headerTitle}>Inventários</Text>
           <Text style={inventoryListStyles.headerSub}>
             {inventories.length === 0
               ? 'Nenhum inventário'
               : `${inventories.length} inventário${inventories.length > 1 ? 's' : ''}`}
           </Text>
         </View>
+
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity onPress={handleGoToReports} style={inventoryListStyles.iconBtn}>
+            <Text style={inventoryListStyles.iconBtnText}>📊</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleGoToSettings} style={inventoryListStyles.iconBtn}>
+            <Text style={inventoryListStyles.iconBtnText}>⚙️</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <FlatList
         data={inventories}
-        keyExtractor={(item, index) => `${item.name}-${index}`}
+        keyExtractor={(item, index) => `${item.id}-${index}`}
         renderItem={renderItem}
         contentContainerStyle={[
           inventoryListStyles.listContent,
@@ -158,17 +212,20 @@ export const InventoryListScreen = () => {
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={handleRefresh}
-            tintColor="#00E5A0"
-            colors={['#00E5A0']}
+            tintColor={colors.accent}
+            colors={[colors.accent]}
           />
         }
-        ListEmptyComponent={<EmptyState />}
+        ListEmptyComponent={
+          <EmptyState onImport={handleGoToImportCSV} onManual={handleGoToManualInventory} />
+        }
         showsVerticalScrollIndicator={false}
       />
 
+      {/* FAB com opções */}
       <TouchableOpacity
         style={inventoryListStyles.fab}
-        onPress={() => navigation.navigate('CreateInventory')}
+        onPress={handleGoToImportCSV}
         activeOpacity={0.85}
       >
         <Text style={inventoryListStyles.fabIcon}>+</Text>
@@ -230,7 +287,12 @@ const InventoryCard = ({ item, onPress, onDelete }: InventoryCardProps) => {
         <View>
           <View style={inventoryListStyles.statsRow}>
             <Text style={inventoryListStyles.statsLabel}>Progresso</Text>
-            <Text style={[inventoryListStyles.statsCount, isComplete && inventoryListStyles.statsCountComplete]}>
+            <Text
+              style={[
+                inventoryListStyles.statsCount,
+                isComplete && inventoryListStyles.statsCountComplete,
+              ]}
+            >
               {item.stats.scannedItems}
               <Text style={inventoryListStyles.statsTotal}>/{item.stats.totalItems}</Text>
             </Text>
@@ -244,7 +306,12 @@ const InventoryCard = ({ item, onPress, onDelete }: InventoryCardProps) => {
               ]}
             />
           </View>
-          <Text style={[inventoryListStyles.pctLabel, isComplete && inventoryListStyles.pctLabelComplete]}>
+          <Text
+            style={[
+              inventoryListStyles.pctLabel,
+              isComplete && inventoryListStyles.pctLabelComplete,
+            ]}
+          >
             {pct}%
           </Text>
         </View>
@@ -255,12 +322,28 @@ const InventoryCard = ({ item, onPress, onDelete }: InventoryCardProps) => {
   );
 };
 
-// ─── Sub-componente: estado vazio ─────────────────────────────────────────────
+// ─── Sub-componente: estado vazio com ações ───────────────────────────────────
 
-const EmptyState = () => (
+interface EmptyStateProps {
+  onImport: () => void;
+  onManual: () => void;
+}
+
+const EmptyState = ({ onImport, onManual }: EmptyStateProps) => (
   <View style={inventoryListStyles.emptyContainer}>
     <Text style={inventoryListStyles.emptyIcon}>📋</Text>
     <Text style={inventoryListStyles.emptyTitle}>Nenhum inventário encontrado</Text>
-    <Text style={inventoryListStyles.emptyDesc}>Toque em "+ Novo inventário" para começar.</Text>
+    <Text style={inventoryListStyles.emptyDesc}>
+      Importe um arquivo CSV ou cadastre manualmente para começar.
+    </Text>
+
+    <View style={{ flexDirection: 'row', gap: 12, marginTop: 24 }}>
+      <TouchableOpacity style={inventoryListStyles.emptyBtn} onPress={onImport}>
+        <Text style={inventoryListStyles.emptyBtnText}>📄 Importar CSV</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={inventoryListStyles.emptyBtn} onPress={onManual}>
+        <Text style={inventoryListStyles.emptyBtnText}>✏️ Cadastrar</Text>
+      </TouchableOpacity>
+    </View>
   </View>
 );

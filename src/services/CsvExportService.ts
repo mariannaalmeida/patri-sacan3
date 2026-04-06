@@ -8,10 +8,10 @@
  * - exportFull()     → relatório completo (todos os itens + status)
  */
 
-import { Directory, File, Paths } from 'expo-file-system'; // ✅ Nova API
+import { Directory, File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { AssetItem, Result } from '../types/types';
-import { handleServiceError } from '../utils/error.utils';
+import { handleServiceError } from '../utils/errorUtils'; 
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -25,8 +25,14 @@ export interface InventoryReport {
 
 /** Escapa campo para CSV (RFC 4180) */
 function csvField(value: string | number | null | undefined): string {
-  const str = String(value ?? '');
-  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  
+  const str = String(value);
+  
+  // Se contém caracteres especiais, encapsular entre aspas
+  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
     return `"${str.replace(/"/g, '""')}"`;
   }
   return str;
@@ -37,47 +43,92 @@ function csvRow(fields: (string | number | null | undefined)[]): string {
 }
 
 /**
- * ✅ Escreve o arquivo usando a nova API do FileSystem e compartilha
+ * Escreve o arquivo usando a nova API do FileSystem e compartilha
  */
 async function writeAndShare(filename: string, content: string): Promise<void> {
   const bom = '\uFEFF'; // BOM UTF-8 para compatibilidade com Excel
 
-  // 1. Acessa a pasta de cache do sistema
-  const cacheDir = new Directory(Paths.cache);
+  try {
+    // 1. Acessa a pasta de cache do sistema
+    const cacheDir = new Directory(Paths.cache);
+    
+    // Garante que o diretório existe
+    if (!cacheDir.exists) {
+      cacheDir.create({ intermediates: true, idempotent: true });
+    }
 
-  // 2. Cria a referência do arquivo
-  const file = new File(cacheDir, filename);
+    // 2. Cria a referência do arquivo
+    const file = new File(cacheDir, filename);
 
-  // 3. Escreve o conteúdo (a nova API usa UTF-8 por padrão para strings)
-  await file.write(bom + content);
+    // 3. Escreve o conteúdo (a nova API usa UTF-8 por padrão para strings)
+    await file.write(bom + content);
 
-  // 4. Verifica se o dispositivo pode compartilhar
-  const canShare = await Sharing.isAvailableAsync();
-  if (!canShare) {
-    throw new Error('Compartilhamento não disponível neste dispositivo.');
+    // 4. Verifica se o dispositivo pode compartilhar
+    const isSharingAvailable = await Sharing.isAvailableAsync();
+    if (!isSharingAvailable) {
+      throw new Error('Compartilhamento não disponível neste dispositivo.');
+    }
+
+    // 5. Compartilha usando a URI gerada pelo novo objeto File
+    await Sharing.shareAsync(file.uri, {
+      mimeType: 'text/csv',
+      dialogTitle: `Exportar ${filename}`,
+      UTI: 'public.comma-separated-values-text',
+    });
+  } catch (error) {
+    console.error('Erro ao escrever/compartilhar arquivo:', error);
+    throw new Error(`Falha ao exportar arquivo: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
   }
-
-  // 5. Compartilha usando a URI gerada pelo novo objeto File
-  await Sharing.shareAsync(file.uri, {
-    mimeType: 'text/csv',
-    dialogTitle: `Exportar ${filename}`,
-    UTI: 'public.comma-separated-values-text',
-  });
 }
 
 function sanitizeFileName(name: string): string {
+  if (!name) return 'inventario';
+  
   return name
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]/gi, '_')
-    .toLowerCase();
+    .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+    .replace(/[^a-z0-9]/gi, '_') // Substitui caracteres especiais por _
+    .replace(/_+/g, '_') // Remove múltiplos underscores
+    .replace(/^_|_$/g, '') // Remove underscores do início/fim
+    .toLowerCase()
+    .substring(0, 50); // Limita tamanho do nome
 }
 
 /**
  * Type guard para verificar se um item tem scanDate (encontrado)
  */
 function hasScanDate(item: AssetItem): item is AssetItem & { found: true; scanDate: string } {
-  return item.found === true;
+  return item.found === true && 'scanDate' in item && typeof item.scanDate === 'string';
+}
+
+/**
+ * Formata data para o padrão brasileiro
+ */
+function formatDate(date: Date | string | null | undefined): string {
+  if (!date) return '';
+  
+  try {
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    if (isNaN(dateObj.getTime())) return '';
+    return dateObj.toLocaleDateString('pt-BR');
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Formata hora para o padrão brasileiro
+ */
+function formatTime(date: Date | string | null | undefined): string {
+  if (!date) return '';
+  
+  try {
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    if (isNaN(dateObj.getTime())) return '';
+    return dateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return '';
+  }
 }
 
 // ─── Serviço ──────────────────────────────────────────────────────────────────
@@ -85,10 +136,13 @@ function hasScanDate(item: AssetItem): item is AssetItem & { found: true; scanDa
 export class CSVExportService {
   /**
    * Exporta todos os itens encontrados com timestamp de scan.
-   * ✅ Agora retorna Promise<Result<void>>
    */
   static async exportFound(report: InventoryReport): Promise<Result<void>> {
     return handleServiceError(async () => {
+      if (!report.foundItems.length) {
+        throw new Error('Não há itens encontrados para exportar.');
+      }
+
       const header = csvRow([
         'Código',
         'Descrição',
@@ -109,10 +163,8 @@ export class CSVExportService {
           item.location,
           item.status,
           item.value,
-          scanDateObj ? scanDateObj.toLocaleDateString('pt-BR') : '',
-          scanDateObj
-            ? scanDateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-            : '',
+          formatDate(scanDateObj),
+          formatTime(scanDateObj),
         ]);
       });
 
@@ -123,10 +175,13 @@ export class CSVExportService {
 
   /**
    * Exporta itens NÃO encontrados (pendentes ao final do inventário).
-   * ✅ Agora retorna Promise<Result<void>>
    */
   static async exportPending(report: InventoryReport): Promise<Result<void>> {
     return handleServiceError(async () => {
+      if (!report.notFoundItems.length) {
+        throw new Error('Não há itens pendentes para exportar.');
+      }
+
       const header = csvRow([
         'Código',
         'Descrição',
@@ -154,10 +209,13 @@ export class CSVExportService {
 
   /**
    * Exporta relatório completo: todos os itens + coluna de situação.
-   * ✅ Agora retorna Promise<Result<void>>
    */
   static async exportFull(report: InventoryReport): Promise<Result<void>> {
     return handleServiceError(async () => {
+      if (!report.foundItems.length && !report.notFoundItems.length) {
+        throw new Error('Não há itens para exportar.');
+      }
+
       const header = csvRow([
         'Código',
         'Descrição',
@@ -170,13 +228,15 @@ export class CSVExportService {
         'Hora do Scan',
       ]);
 
+      // Combina e ordena todos os itens
       const allItems = [...report.foundItems, ...report.notFoundItems].sort((a, b) =>
         a.code.localeCompare(b.code)
       );
 
       const rows = allItems.map((item) => {
-        const isFound = item.found;
+        const isFound = item.found === true;
         const scanDateObj = isFound && hasScanDate(item) ? new Date(item.scanDate) : null;
+        
         return csvRow([
           item.code,
           item.description,
@@ -185,10 +245,8 @@ export class CSVExportService {
           item.status,
           item.value,
           isFound ? 'Encontrado' : 'Pendente',
-          scanDateObj ? scanDateObj.toLocaleDateString('pt-BR') : '',
-          scanDateObj
-            ? scanDateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-            : '',
+          formatDate(scanDateObj),
+          formatTime(scanDateObj),
         ]);
       });
 

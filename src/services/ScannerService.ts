@@ -1,7 +1,7 @@
-import { AssetItem, Inventory, ScanResult, Result } from '../types/types';
-import { StorageService } from './StorageService';
-import { handleServiceError } from '../utils/error.utils';
+import { AssetItem, Inventory, Result, ScanResult } from '../types/types';
 import { toISODate } from '../utils/dateUtils';
+import { handleServiceError } from '../utils/errorUtils';
+import { StorageService } from './StorageService';
 
 export interface ScanMatch {
   status: 'found' | 'not_found' | 'already_scanned';

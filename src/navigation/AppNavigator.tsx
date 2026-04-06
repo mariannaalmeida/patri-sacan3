@@ -1,31 +1,31 @@
+// src/navigation/AppNavigator.tsx
+
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { StatusBar } from 'expo-status-bar';
 import React from 'react';
-import { RootStackParamList } from './src/types/types';
+import { colors } from '../styles/theme';
+import { RootStackParamList } from '../types/types';
 
 // Importação das telas
 
-import { HomeScreen } from './src/screens/HomeScreen';
-import { ImportInventoryScreen } from './src/screens/ImportInventoryScreen';
-import { InventoryDetailScreen } from './src/screens/InventoryDetailScreen';
-import { InventoryListScreen } from './src/screens/InventoryListScreen';
-import { ManualInventoryScreen } from './src/screens/MInventoryScreen';
-import { ReportDetailScreen } from './src/screens/ReportDetailScreen';
-import { ReportsScreen } from './src/screens/ReportsScreen';
-import { ScannerScreen } from './src/screens/ScannerScreen ';
+import { HomeScreen } from '../screens/HomeScreen';
+import { ImportInventoryScreen } from '../screens/ImportInventoryScreen';
+import { InventoryDetailScreen } from '../screens/InventoryDetailScreen';
+import { ManualInventoryScreen } from '../screens/MInventoryScreen';
+import { ReportDetailScreen } from '../screens/ReportDetailScreen';
+import { ReportsScreen } from '../screens/ReportsScreen';
+import { ScannerScreen } from '../screens/ScannerScreen ';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-export default function App() {
+export const AppNavigator = () => {
   return (
     <NavigationContainer>
-      <StatusBar style="light" backgroundColor="#0A0A0F" />
       <Stack.Navigator
         initialRouteName="Home"
         screenOptions={{
           headerShown: false,
-          contentStyle: { backgroundColor: '#0A0A0F' },
+          contentStyle: { backgroundColor: colors.bg },
           animation: 'slide_from_right',
         }}
       >
@@ -33,18 +33,15 @@ export default function App() {
         <Stack.Screen name="Home" component={HomeScreen} />
         <Stack.Screen name="InventoryDetail" component={InventoryDetailScreen} />
         <Stack.Screen name="Scanner" component={ScannerScreen} />
-
         {/* Telas de relatório */}
         <Stack.Screen name="Reports" component={ReportsScreen} />
         <Stack.Screen name="ReportDetail" component={ReportDetailScreen} />
-
-        {/* Telas de criação/importação */}
+        {/* Telas de criação */}
         <Stack.Screen name="ImportInventory" component={ImportInventoryScreen} />
         <Stack.Screen name="ManualInventory" component={ManualInventoryScreen} />
-        <Stack.Screen name="InventoryList" component={InventoryListScreen} />
-
         {/* Telas de configuração */}
+        // TO DO
       </Stack.Navigator>
     </NavigationContainer>
   );
-}
+};

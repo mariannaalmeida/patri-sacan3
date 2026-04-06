@@ -1,5 +1,5 @@
 // src/styles/theme.ts
-import { StyleSheet, Platform } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 
 // Cores do sistema
 export const colors = {
@@ -49,6 +49,21 @@ export const commonStyles = StyleSheet.create({
 
 // Estilos específicos da tela de scanner
 export const scannerStyles = StyleSheet.create({
+  homeBtn: {
+    backgroundColor: colors.accent + '22',
+    borderWidth: 1,
+    borderColor: colors.accent + '55',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  homeBtnText: {
+    color: colors.accent,
+    fontSize: 13,
+    fontWeight: '600',
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -498,6 +513,47 @@ export const scannerStyles = StyleSheet.create({
 
 // Estilos específicos da tela de lista de inventários
 export const inventoryListStyles = StyleSheet.create({
+  backBtn: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  backBtnText: {
+    fontSize: 22,
+    color: colors.text,
+  },
+  headerCenter: {
+    flex: 1,
+    marginHorizontal: 12,
+  },
+  iconBtn: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.accent + '22',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.accent + '44',
+  },
+  iconBtnText: {
+    fontSize: 16,
+    color: colors.accent,
+  },
+  emptyBtn: {
+    backgroundColor: colors.accent + '22',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.accent + '44',
+  },
+  emptyBtnText: {
+    color: colors.accent,
+    fontSize: 14,
+    fontWeight: '600',
+  },
   header: {
     paddingTop: Platform.OS === 'ios' ? 56 : 36,
     paddingBottom: 16,
@@ -676,6 +732,20 @@ export const inventoryListStyles = StyleSheet.create({
 
 // Estilos específicos da tela de detalhe do inventário
 export const inventoryDetailStyles = StyleSheet.create({
+  reportBtn: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.accent + '22',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.accent + '44',
+  },
+  reportBtnText: {
+    fontSize: 16,
+    color: colors.accent,
+  },
   loadingContainer: {
     flex: 1,
     backgroundColor: colors.bg,
@@ -1375,5 +1445,1074 @@ export const homeStyles = StyleSheet.create({
   },
 });
 
+// Adicione após homeStyles
+export const reportDetailStyles = StyleSheet.create({
+  iconBtn: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.accent + '22',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.accent + '44',
+  },
+  iconBtnText: {
+    fontSize: 16,
+    color: colors.accent,
+  },
+  exportHeader: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ffffff0A',
+    alignItems: 'flex-end',
+  },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: colors.bg,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
+  },
+  loadingText: {
+    color: colors.textDim,
+    fontSize: 15,
+  },
+  container: {
+    flex: 1,
+    backgroundColor: colors.bg,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: Platform.OS === 'ios' ? 56 : 36,
+    paddingBottom: 12,
+    paddingHorizontal: 16,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ffffff0A',
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  backBtnText: {
+    fontSize: 22,
+    color: colors.text,
+  },
+  headerCenter: {
+    flex: 1,
+    marginHorizontal: 10,
+  },
+  headerTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  headerSub: {
+    fontSize: 11,
+    color: colors.textDim,
+    marginTop: 2,
+  },
+  exportBtns: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  exportBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    backgroundColor: colors.surface2,
+    borderWidth: 1,
+    borderColor: '#ffffff10',
+  },
+  exportBtnPDF: {
+    borderColor: colors.accentWarn + '33',
+  },
+  exportBtnText: {
+    fontSize: 12,
+    color: colors.textDim,
+    fontWeight: '700',
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 48,
+  },
+  section: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#ffffff0A',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  sectionAccent: {
+    width: 3,
+    height: 16,
+    backgroundColor: colors.accent,
+    borderRadius: 2,
+    marginRight: 8,
+  },
+  sectionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.text,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  overviewRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 14,
+  },
+  pieWrapper: {
+    backgroundColor: colors.bg,
+    borderRadius: 12,
+    padding: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statsColumn: {
+    flex: 1,
+    gap: 8,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: colors.surface2,
+    borderRadius: 10,
+    padding: 10,
+  },
+  statLabel: {
+    fontSize: 9,
+    color: colors.textDim,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginBottom: 3,
+  },
+  statValue: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  statValueAccent: {
+    color: colors.accent,
+  },
+  statValueWarn: {
+    color: colors.accentWarn,
+  },
+  progressSection: {
+    marginBottom: 12,
+  },
+  progressRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  progressLabel: {
+    fontSize: 12,
+    color: colors.textDim,
+  },
+  progressPct: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.accent,
+  },
+  progressPctComplete: {
+    color: '#00FF99',
+  },
+  progressTrack: {
+    height: 6,
+    backgroundColor: '#ffffff0F',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: colors.accent,
+    borderRadius: 3,
+  },
+  progressFillComplete: {
+    backgroundColor: '#00FF99',
+  },
+  metaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  metaItem: {},
+  metaLabel: {
+    fontSize: 9,
+    color: colors.textDim,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  metaValue: {
+    fontSize: 12,
+    color: colors.text,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  chartDark: {
+    backgroundColor: colors.bg,
+    borderRadius: 10,
+    padding: 8,
+    marginBottom: 10,
+  },
+  chartCaption: {
+    fontSize: 11,
+    color: colors.textDim,
+    textAlign: 'center',
+  },
+  groupTable: {
+    marginTop: 4,
+  },
+  groupTableHeader: {
+    flexDirection: 'row',
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ffffff0A',
+  },
+  groupTableHeaderCell: {
+    flex: 1,
+    fontSize: 9,
+    color: colors.textDim,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  groupRow: {
+    flexDirection: 'row',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ffffff06',
+  },
+  groupRowEven: {
+    backgroundColor: '#ffffff03',
+  },
+  groupCell: {
+    flex: 1,
+    fontSize: 12,
+    color: colors.text,
+  },
+  allFoundBanner: {
+    backgroundColor: colors.accent + '18',
+    borderRadius: 10,
+    padding: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.accent + '33',
+  },
+  allFoundText: {
+    color: colors.accent,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  itemRow: {
+    flexDirection: 'row',
+    backgroundColor: colors.surface2,
+    borderRadius: 10,
+    marginBottom: 6,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#ffffff0A',
+  },
+  itemRowPending: {
+    borderColor: colors.accentWarn + '22',
+  },
+  itemInd: {
+    width: 3,
+    backgroundColor: '#ffffff10',
+  },
+  itemIndPending: {
+    backgroundColor: colors.accentWarn,
+  },
+  itemBody: {
+    flex: 1,
+    padding: 10,
+  },
+  itemCode: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 2,
+  },
+  itemDesc: {
+    fontSize: 12,
+    color: colors.textDim,
+    marginBottom: 4,
+  },
+  itemMeta: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  itemMetaTxt: {
+    fontSize: 11,
+    color: colors.textDim,
+  },
+  scanRow: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ffffff06',
+  },
+  scanIndex: {
+    fontSize: 11,
+    color: colors.textDim,
+    width: 24,
+    textAlign: 'right',
+    marginTop: 2,
+  },
+  scanBody: {
+    flex: 1,
+  },
+  scanHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
+  scanCode: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  scanTime: {
+    fontSize: 11,
+    color: colors.accent,
+  },
+  scanDelta: {
+    color: colors.textDim,
+  },
+  scanDesc: {
+    fontSize: 12,
+    color: colors.textDim,
+    marginBottom: 2,
+  },
+  scanMeta: {
+    fontSize: 11,
+    color: colors.textDim,
+  },
+});
 
+export const createInventoryStyles = StyleSheet.create({
+  backBtn: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  backBtnText: {
+    fontSize: 22,
+    color: colors.text,
+  },
+  container: {
+    flex: 1,
+    backgroundColor: colors.bg,
+  },
+  header: {
+    padding: 20,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ffffff0A',
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: colors.text,
+  },
+  stepContainer: {
+    flex: 1,
+    padding: 20,
+  },
+  label: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: colors.text,
+    marginBottom: 8,
+  },
+  input: {
+    backgroundColor: colors.surface2,
+    borderWidth: 1,
+    borderColor: '#ffffff15',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    color: colors.text,
+    marginBottom: 20,
+  },
+  actionButton: {
+    backgroundColor: colors.accent,
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginVertical: 10,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+  actionButtonText: {
+    color: '#000',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  hint: {
+    fontSize: 14,
+    color: colors.textDim,
+    textAlign: 'center',
+    marginTop: 20,
+  },
+  stepTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 8,
+  },
+  stepDescription: {
+    fontSize: 14,
+    color: colors.textDim,
+    marginBottom: 20,
+  },
+  mappingList: {
+    flex: 1,
+    marginBottom: 20,
+  },
+  mappingItem: {
+    backgroundColor: colors.surface,
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#ffffff0A',
+  },
+  csvHeader: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: colors.text,
+    marginBottom: 10,
+  },
+  mappingControls: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  fieldButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: colors.surface2,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  fieldButtonActive: {
+    backgroundColor: colors.accent,
+  },
+  fieldButtonText: {
+    fontSize: 12,
+    color: colors.textDim,
+  },
+  fieldButtonTextActive: {
+    color: '#000',
+  },
+  confidenceText: {
+    fontSize: 12,
+    color: colors.textDim,
+    marginTop: 8,
+  },
+  statsCard: {
+    backgroundColor: colors.surface,
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#ffffff0A',
+  },
+  statsTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 10,
+  },
+  statsText: {
+    fontSize: 14,
+    color: colors.textDim,
+    marginBottom: 5,
+  },
+  previewTitle: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: colors.text,
+    marginBottom: 10,
+  },
+  previewList: {
+    flex: 1,
+    marginBottom: 20,
+  },
+  previewItem: {
+    backgroundColor: colors.surface,
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#ffffff0A',
+  },
+  previewText: {
+    fontSize: 14,
+    color: colors.textDim,
+    marginBottom: 4,
+  },
+  progressBar: {
+    height: 4,
+    backgroundColor: colors.surface2,
+    borderRadius: 2,
+    marginTop: 20,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: colors.accent,
+  },
+  errorText: {
+    color: colors.accentErr,
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 10,
+  },
+});
 
+export const reportsStyles = StyleSheet.create({
+  backBtn: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  backBtnText: {
+    fontSize: 22,
+    color: colors.text,
+  },
+  headerCenter: {
+    flex: 1,
+    marginHorizontal: 12,
+  },
+  iconBtn: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.accent + '22',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.accent + '44',
+  },
+  iconBtnText: {
+    fontSize: 16,
+    color: colors.accent,
+  },
+  emptyBtn: {
+    backgroundColor: colors.accent + '22',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.accent + '44',
+  },
+  emptyBtnText: {
+    color: colors.accent,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  container: {
+    flex: 1,
+    backgroundColor: colors.bg,
+  },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: colors.bg,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
+  },
+  loadingText: {
+    color: colors.textDim,
+    fontSize: 15,
+  },
+  header: {
+    paddingTop: Platform.OS === 'ios' ? 56 : 36,
+    paddingBottom: 14,
+    paddingHorizontal: 20,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ffffff0A',
+  },
+  headerTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: colors.text,
+    letterSpacing: -0.5,
+  },
+  headerSub: {
+    fontSize: 13,
+    color: colors.textDim,
+    marginTop: 2,
+  },
+  listContent: {
+    padding: 16,
+    paddingBottom: 40,
+  },
+  listEmpty: {
+    flex: 1,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingTop: 80,
+  },
+  emptyIcon: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 8,
+  },
+  emptyDesc: {
+    fontSize: 14,
+    color: colors.textDim,
+    textAlign: 'center',
+    paddingHorizontal: 32,
+  },
+  card: {
+    flexDirection: 'row',
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    marginBottom: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#ffffff0A',
+  },
+  cardAccent: {
+    width: 4,
+    backgroundColor: '#534AB7',
+  },
+  cardAccentComplete: {
+    backgroundColor: colors.accent,
+  },
+  cardBody: {
+    flex: 1,
+    padding: 14,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  cardName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.text,
+    flex: 1,
+    marginRight: 8,
+  },
+  badgeComplete: {
+    backgroundColor: colors.accent + '22',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: colors.accent + '44',
+  },
+  badgeCompleteText: {
+    fontSize: 10,
+    color: colors.accent,
+    fontWeight: '700',
+  },
+  badgeInProgress: {
+    backgroundColor: '#534AB722',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: '#534AB744',
+  },
+  badgeInProgressText: {
+    fontSize: 10,
+    color: '#AFA9EC',
+    fontWeight: '700',
+  },
+  miniStats: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 10,
+  },
+  miniStat: {
+    flex: 1,
+    backgroundColor: colors.surface2,
+    borderRadius: 8,
+    padding: 8,
+    alignItems: 'center',
+  },
+  miniStatLabel: {
+    fontSize: 9,
+    color: colors.textDim,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginBottom: 3,
+  },
+  miniStatValue: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  miniStatAccent: {
+    color: colors.accent,
+  },
+  miniStatWarn: {
+    color: colors.accentWarn,
+  },
+  progressTrack: {
+    height: 5,
+    backgroundColor: '#ffffff0F',
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#534AB7',
+    borderRadius: 3,
+  },
+  progressFillComplete: {
+    backgroundColor: colors.accent,
+  },
+  duration: {
+    fontSize: 11,
+    color: colors.textDim,
+    marginBottom: 10,
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  actionBtn: {
+    flex: 1,
+    backgroundColor: colors.surface2,
+    borderRadius: 8,
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#ffffff0A',
+  },
+  actionBtnExport: {
+    flex: 0,
+    paddingHorizontal: 16,
+  },
+  actionBtnText: {
+    fontSize: 12,
+    color: colors.textDim,
+    fontWeight: '600',
+  },
+});
+// src/styles/theme.ts
+
+// Adicione ao final do arquivo:
+
+export const manualInventoryStyles = StyleSheet.create({
+  backBtn: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  backBtnText: {
+    fontSize: 22,
+    color: colors.text,
+  },
+  homeBtn: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.accent + '22',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.accent + '44',
+  },
+  homeBtnText: {
+    fontSize: 16,
+    color: colors.accent,
+  },
+  container: {
+    flex: 1,
+    backgroundColor: colors.bg,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: Platform.OS === 'ios' ? 56 : 36,
+    paddingBottom: 12,
+    paddingHorizontal: 16,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ffffff0A',
+  },
+
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  content: {
+    flex: 1,
+    padding: 16,
+  },
+  section: {
+    marginBottom: 24,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  label: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 8,
+  },
+  fieldLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.textDim,
+    marginBottom: 4,
+    marginTop: 8,
+  },
+  input: {
+    backgroundColor: colors.surface2,
+    borderWidth: 1,
+    borderColor: '#ffffff15',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    color: colors.text,
+  },
+  textArea: {
+    minHeight: 60,
+    textAlignVertical: 'top',
+  },
+  row: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  halfField: {
+    flex: 1,
+  },
+  addButton: {
+    backgroundColor: colors.accent + '22',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.accent + '44',
+  },
+  addButtonText: {
+    color: colors.accent,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  itemCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#ffffff0A',
+  },
+  itemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ffffff0A',
+  },
+  itemTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.accent,
+  },
+  removeButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  removeButtonText: {
+    color: colors.accentErr,
+    fontSize: 12,
+  },
+  saveButton: {
+    backgroundColor: colors.accent,
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  saveButtonText: {
+    color: '#000',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+  statusPicker: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 4,
+  },
+  statusOption: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: colors.surface2,
+    borderWidth: 1,
+    borderColor: '#ffffff15',
+  },
+  statusOptionActive: {
+    backgroundColor: colors.accent + '22',
+    borderColor: colors.accent + '55',
+  },
+  statusOptionText: {
+    fontSize: 12,
+    color: colors.textDim,
+  },
+  statusOptionTextActive: {
+    color: colors.accent,
+    fontWeight: '600',
+  },
+});
+
+// src/styles/theme.ts (adicione no final)
+
+export const settingsStyles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: Platform.OS === 'ios' ? 56 : 36,
+    paddingBottom: 12,
+    paddingHorizontal: 16,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ffffff0A',
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  backBtnText: {
+    fontSize: 22,
+    color: colors.text,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  content: {
+    flex: 1,
+    padding: 16,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#ffffff0A',
+  },
+  menuItemText: {
+    fontSize: 16,
+    color: colors.text,
+  },
+  menuItemArrow: {
+    fontSize: 16,
+    color: colors.textDim,
+  },
+});
+
+export const aboutStyles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: Platform.OS === 'ios' ? 56 : 36,
+    paddingBottom: 12,
+    paddingHorizontal: 16,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ffffff0A',
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  backBtnText: {
+    fontSize: 22,
+    color: colors.text,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  content: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+  },
+  appName: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: colors.accent,
+    marginBottom: 8,
+  },
+  version: {
+    fontSize: 14,
+    color: colors.textDim,
+    marginBottom: 24,
+  },
+  description: {
+    fontSize: 16,
+    color: colors.text,
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+});

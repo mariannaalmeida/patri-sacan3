@@ -3,29 +3,30 @@
 
 // ------------- DOMINIO --------------------------------
 
-
 export type InventoryId = string;
-export type AssetId = string;
+export type AssetCode = string;
 
-// Sugestão de tipagem estrita para o status (adicione os que fizerem sentido pro seu negócio)
-export type AssetStatus = 'good' | 'damaged' | 'missing' | 'in_repair' | string;
+export type MappableField = 'code' | 'description' | 'department' | 'location' | 'status' | 'value';
 
+export const isMappableField = (field: string): field is MappableField => {
+  return ['code', 'description', 'department', 'location', 'status', 'value'].includes(field);
+};
 
-  export  type AssetItemBase = {
-  id: AssetId;
-  code: string;
+export type AssetStatus = 'good' | 'damaged' | 'missing' | 'in_repair';
+
+export interface AssetItemBase {
+  code: AssetCode;
   description: string;
   department: string;
   location: string;
   status: AssetStatus;
   value?: number;
   importDate?: ISODateString;
-};
+}
 
- export type AssetItem = 
+export type AssetItem =
   | (AssetItemBase & { found: true; scanDate: ISODateString })
   | (AssetItemBase & { found: false; scanDate?: never });
-
 
 export interface InventoryMetadata {
   id: InventoryId;
@@ -33,6 +34,9 @@ export interface InventoryMetadata {
   importDate: ISODateString;
   totalItems: number;
   status: 'active' | 'completed' | 'archived';
+  lastModified?: ISODateString;
+  description?: string;
+  tags?: string[];
 }
 
 export interface Inventory {
@@ -89,15 +93,15 @@ export interface BackupInfo {
 
 export interface ColumnMapping {
   csvHeader: string;
-  mappedField?: keyof AssetItemBase;
+  mappedField?: MappableField; // Agora usa MappableField
   confidence: number;
 }
 
 export interface CSVValidationResult {
   validRows: number;
   errorRows: number;
-  errors: { row: number; field: string; message: string; value?: string; }[];
-  warnings: { row: number; field: string; message: string; value?: string; }[];
+  errors: { row: number; field: string; message: string; value?: string }[];
+  warnings: { row: number; field: string; message: string; value?: string }[];
 }
 
 export interface ColumnMappingScreenProps {
@@ -116,7 +120,7 @@ export interface FieldDefinition {
   type: FieldType;
   required: boolean;
   fixed?: boolean;
-  defaultValue?: string | number | boolean | null; 
+  defaultValue?: string | number | boolean | null;
   options?: string[];
   validation?: {
     min?: number;
@@ -155,14 +159,41 @@ export interface PaginatedResult<T> {
 export type ISODateString = string & { readonly __brand: unique symbol };
 
 // --- Navegation ---
+// src/types/types.ts
+
+// src/types/types.ts
+
 export type RootStackParamList = {
+  // Tela inicial
   Home: undefined;
-  InventoryList: undefined;
-  InventoryDetail: { inventoryName: string };
-  CreateInventory: undefined;
-  Scanner: { inventoryId: string };
+
+  // Detalhe do inventário
+  InventoryDetail: {
+    inventoryId: string;
+    inventoryName: string;
+  };
+
+  // Scanner
+  Scanner: {
+    inventoryId: string;
+  };
+
+  // Relatórios
   Reports: undefined;
-  ReportDetail: { inventoryName: string };
+  ReportDetail: {
+    inventoryId: string;
+    inventoryName?: string;
+  };
+
+  // Criação/Importação
+  ImportInventory: undefined; // Importar CSV
+  ManualInventory: undefined; // Cadastro manual
+
+  InventoryList: undefined;
+
+  // Configurações
+  Settings: undefined;
+  About: undefined;
 };
 
 // --- Export ---
@@ -197,6 +228,9 @@ export type AppErrorCode =
   | 'IMPORT_NO_CODE_COLUMN'
   | 'IMPORT_DUPLICATE_CODE'
   | 'IMPORT_VALIDATION_FAILED'
+  | 'STORAGE_RENAME_FAILED'
+  | 'STORAGE_EXPORT_FAILED'
+  | 'STORAGE_IMPORT_FAILED'
   // Scanner
   | 'SCAN_INVALID_CODE'
   | 'SCAN_CONFIRM_FAILED'
@@ -235,5 +269,3 @@ export function unknownToAppError(cause: unknown, code: AppErrorCode = 'UNKNOWN'
  *   if (!result.ok) { Alert.alert('Erro', result.error.message) }
  */
 export type Result<T> = { ok: true; value: T } | { ok: false; error: AppError };
-
-

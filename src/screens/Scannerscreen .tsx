@@ -1,26 +1,26 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  TextInput,
-  Alert,
-  Modal,
-  Vibration,
-  Animated,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-  StatusBar,
-  ActivityIndicator,
-} from 'react-native';
-import { commonStyles, scannerStyles } from '../styles/theme';
-import { CameraView, useCameraPermissions } from 'expo-camera';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Inventory, AssetItem, RootStackParamList } from '../types/types';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Animated,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StatusBar,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  Vibration,
+  View,
+} from 'react-native';
 import { ScannerService } from '../services/ScannerService';
 import { StorageService } from '../services/StorageService';
+import { colors, commonStyles, scannerStyles } from '../styles/theme';
+import { AssetItem, Inventory, RootStackParamList } from '../types/types';
 
 type ScannerRouteProp = RouteProp<RootStackParamList, 'Scanner'>;
 type ScannerNavProp = NativeStackNavigationProp<RootStackParamList>;
@@ -83,10 +83,10 @@ export const ScannerScreen = () => {
 
   // Permissão de câmera
   useEffect(() => {
-    if (mode === 'camera' && !permission?.granted) {
+    if (mode === 'camera' && permission && !permission.granted) {
       requestPermission();
     }
-  }, [mode]);
+  }, [mode, permission, requestPermission]);
 
   // Alertas
   const showAlert = useCallback((type: AlertBanner['type'], message: string) => {
@@ -146,7 +146,7 @@ export const ScannerScreen = () => {
   const handleConfirm = useCallback(async () => {
     if (!pendingItem || !inventory) return;
 
-    const result = await ScannerService.confirmScan(inventory.metadata.name, pendingItem);
+    const result = await ScannerService.confirmScan(inventory.metadata.id, pendingItem);
 
     setIsConfirmVisible(false);
     setPendingItem(null);
@@ -165,10 +165,20 @@ export const ScannerScreen = () => {
             {
               text: 'Ver relatório',
               onPress: () =>
-                navigation.navigate('InventoryDetail', {
+                navigation.navigate('ReportDetail', {
+                  inventoryId: updatedInventory.metadata.id,
                   inventoryName: updatedInventory.metadata.name,
                 }),
             },
+            {
+              text: 'Ver inventário',
+              onPress: () =>
+                navigation.navigate('InventoryDetail', {
+                  inventoryId: updatedInventory.metadata.id,
+                  inventoryName: updatedInventory.metadata.name,
+                }),
+            },
+            { text: 'Fechar', style: 'cancel' },
           ]);
         }, 600);
       }
@@ -190,13 +200,24 @@ export const ScannerScreen = () => {
     if (!manualCode.trim()) return;
     handleCodeScanned(manualCode);
     setManualCode('');
+    manualInputRef.current?.focus();
   }, [manualCode, handleCodeScanned]);
+
+  // ✅ Navegações adicionais
+  const handleGoBack = () => {
+    navigation.goBack();
+  };
+
+  const handleGoToHome = () => {
+    navigation.navigate('Home');
+  };
 
   // Render loading / erro
   if (loading) {
     return (
       <View style={commonStyles.loadingContainer}>
-        <ActivityIndicator size="large" color="#00E5A0" />
+        <StatusBar barStyle="light-content" backgroundColor={colors.bg} />
+        <ActivityIndicator size="large" color={colors.accent} />
         <Text style={commonStyles.loadingText}>Carregando inventário...</Text>
       </View>
     );
@@ -205,8 +226,9 @@ export const ScannerScreen = () => {
   if (!inventory) {
     return (
       <View style={commonStyles.loadingContainer}>
+        <StatusBar barStyle="light-content" backgroundColor={colors.bg} />
         <Text style={commonStyles.errorText}>Inventário não encontrado.</Text>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={commonStyles.errorButton}>
+        <TouchableOpacity onPress={handleGoBack} style={commonStyles.errorButton}>
           <Text style={commonStyles.errorButtonText}>Voltar</Text>
         </TouchableOpacity>
       </View>
@@ -216,12 +238,13 @@ export const ScannerScreen = () => {
   // Render principal
   return (
     <View style={commonStyles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0A0A0F" />
+      <StatusBar barStyle="light-content" backgroundColor={colors.bg} />
 
+      {/* Header com navegação completa */}
       <View style={scannerStyles.header}>
         <TouchableOpacity
           style={scannerStyles.backBtn}
-          onPress={() => navigation.goBack()}
+          onPress={handleGoBack}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Text style={scannerStyles.backBtnText}>←</Text>
@@ -234,16 +257,22 @@ export const ScannerScreen = () => {
           <Text style={scannerStyles.headerSub}>Escaneamento em andamento</Text>
         </View>
 
-        <TouchableOpacity
-          style={scannerStyles.finishBtn}
-          onPress={() =>
-            navigation.navigate('InventoryDetail', {
-              inventoryName: inventory.metadata.name,
-            })
-          }
-        >
-          <Text style={scannerStyles.finishBtnText}>Concluir</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity style={scannerStyles.homeBtn} onPress={handleGoToHome}>
+            <Text style={scannerStyles.homeBtnText}>🏠</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={scannerStyles.finishBtn}
+            onPress={() =>
+              navigation.navigate('InventoryDetail', {
+                inventoryId: inventory.metadata.id,
+                inventoryName: inventory.metadata.name,
+              })
+            }
+          >
+            <Text style={scannerStyles.finishBtnText}>Concluir</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={scannerStyles.progressSection}>
@@ -416,7 +445,7 @@ interface ManualAreaProps {
   value: string;
   onChange: (v: string) => void;
   onSubmit: () => void;
-  inputRef: React.Ref<TextInput>;
+  inputRef: React.RefObject<TextInput | null>;
 }
 
 const ManualArea = ({ value, onChange, onSubmit, inputRef }: ManualAreaProps) => (

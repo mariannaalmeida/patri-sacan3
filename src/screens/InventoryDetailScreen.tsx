@@ -1,22 +1,21 @@
-import React, { useState, useCallback, useMemo } from 'react';
-import {
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  Alert,
-  RefreshControl,
-  Platform,
-  StatusBar,
-  TextInput,
-  ActivityIndicator,
-} from 'react-native';
-import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
+import { RouteProp, useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { StorageService } from '../services/StorageService';
+import React, { useCallback, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  RefreshControl,
+  StatusBar,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { ScannerService } from '../services/ScannerService';
+import { StorageService } from '../services/StorageService';
+import { colors, commonStyles, inventoryDetailStyles } from '../styles/theme';
 import { AssetItem, Inventory, RootStackParamList } from '../types/types';
-import { commonStyles, inventoryDetailStyles } from '../styles/theme';
 
 type DetailRouteProp = RouteProp<RootStackParamList, 'InventoryDetail'>;
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
@@ -26,7 +25,7 @@ type FilterTab = 'all' | 'pending' | 'scanned';
 export const InventoryDetailScreen = () => {
   const navigation = useNavigation<NavProp>();
   const route = useRoute<DetailRouteProp>();
-  const { inventoryName } = route.params;
+  const { inventoryId, inventoryName: passedName } = route.params;
 
   const [inventory, setInventory] = useState<Inventory | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -40,7 +39,7 @@ export const InventoryDetailScreen = () => {
     async (silent = false) => {
       if (!silent) setIsLoading(true);
       try {
-        const result = await StorageService.loadInventory(inventoryName);
+        const result = await StorageService.loadInventory(inventoryId);
         if (!result.ok) {
           throw new Error(result.error.message);
         }
@@ -55,7 +54,7 @@ export const InventoryDetailScreen = () => {
         setIsRefreshing(false);
       }
     },
-    [inventoryName, navigation]
+    [inventoryId, navigation]
   );
 
   useFocusEffect(
@@ -78,7 +77,7 @@ export const InventoryDetailScreen = () => {
 
     const allItems = inventory.items.map((item) => ({
       ...item,
-      isScanned: item.found,
+      isScanned: item.found === true,
     }));
 
     let result = allItems;
@@ -100,6 +99,16 @@ export const InventoryDetailScreen = () => {
 
   // ─── Ações ───────────────────────────────────────────────────────────────
 
+  // ✅ Navegação para Relatório
+  const handleViewReport = useCallback(() => {
+    if (!inventory) return;
+    navigation.navigate('ReportDetail', {
+      inventoryId: inventory.metadata.id,
+      inventoryName: inventory.metadata.name,
+    });
+  }, [inventory, navigation]);
+
+  // ✅ Navegação para Scanner
   const handleStartScan = useCallback(() => {
     if (!inventory) return;
     if (progress?.remaining === 0) {
@@ -119,6 +128,7 @@ export const InventoryDetailScreen = () => {
     navigation.navigate('Scanner', { inventoryId: inventory.metadata.id });
   }, [inventory, progress, navigation]);
 
+  // ✅ Resetar inventário
   const handleResetInventory = useCallback(() => {
     if (!inventory) return;
     Alert.alert(
@@ -134,7 +144,7 @@ export const InventoryDetailScreen = () => {
             for (const item of inventory.items) {
               if (item.found) {
                 const result = await StorageService.updateItemFoundStatus(
-                  inventory.metadata.name,
+                  inventory.metadata.id,
                   item.code,
                   false
                 );
@@ -156,13 +166,18 @@ export const InventoryDetailScreen = () => {
     );
   }, [inventory, loadInventory]);
 
+  // ✅ Voltar para Home
+  const handleGoBack = () => {
+    navigation.goBack();
+  };
+
   // ─── Loading ──────────────────────────────────────────────────────────────
 
   if (isLoading) {
     return (
       <View style={inventoryDetailStyles.loadingContainer}>
-        <StatusBar barStyle="light-content" backgroundColor="#0A0A0F" />
-        <ActivityIndicator color="#00E5A0" size="large" />
+        <StatusBar barStyle="light-content" backgroundColor={colors.bg} />
+        <ActivityIndicator color={colors.accent} size="large" />
         <Text style={inventoryDetailStyles.loadingText}>Carregando inventário…</Text>
       </View>
     );
@@ -176,12 +191,12 @@ export const InventoryDetailScreen = () => {
 
   return (
     <View style={commonStyles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0A0A0F" />
+      <StatusBar barStyle="light-content" backgroundColor={colors.bg} />
 
-      {/* Header */}
+      {/* Header com botão de voltar e relatório */}
       <View style={inventoryDetailStyles.header}>
         <TouchableOpacity
-          onPress={() => navigation.goBack()}
+          onPress={handleGoBack}
           style={inventoryDetailStyles.backBtn}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
@@ -202,9 +217,16 @@ export const InventoryDetailScreen = () => {
           </Text>
         </View>
 
-        <TouchableOpacity onPress={handleResetInventory} style={inventoryDetailStyles.resetBtn}>
-          <Text style={inventoryDetailStyles.resetBtnText}>↺</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          {/* ✅ Botão de Relatório */}
+          <TouchableOpacity onPress={handleViewReport} style={inventoryDetailStyles.reportBtn}>
+            <Text style={inventoryDetailStyles.reportBtnText}>📊</Text>
+          </TouchableOpacity>
+          {/* ✅ Botão de Reset */}
+          <TouchableOpacity onPress={handleResetInventory} style={inventoryDetailStyles.resetBtn}>
+            <Text style={inventoryDetailStyles.resetBtnText}>↺</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Cards de progresso */}
@@ -255,7 +277,7 @@ export const InventoryDetailScreen = () => {
             value={search}
             onChangeText={setSearch}
             placeholder="Buscar por código, nome ou local…"
-            placeholderTextColor="#6B6B88"
+            placeholderTextColor={colors.textDim}
             autoCapitalize="none"
             autoCorrect={false}
             clearButtonMode="while-editing"
@@ -306,8 +328,8 @@ export const InventoryDetailScreen = () => {
               setIsRefreshing(true);
               loadInventory(true);
             }}
-            tintColor="#00E5A0"
-            colors={['#00E5A0']}
+            tintColor={colors.accent}
+            colors={[colors.accent]}
           />
         }
         ListEmptyComponent={

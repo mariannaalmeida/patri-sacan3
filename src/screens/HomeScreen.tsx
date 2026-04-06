@@ -6,35 +6,36 @@
  * StorageService baseado em Result, navegação por inventoryId).
  */
 
-import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View,
+  ActivityIndicator,
+  FlatList,
+  Modal,
+  RefreshControl,
+  ScrollView,
+  StatusBar,
   Text,
   TextInput,
-  FlatList,
   TouchableOpacity,
-  Modal,
-  ScrollView,
-  ActivityIndicator,
-  RefreshControl,
-  StatusBar,
+  View,
 } from 'react-native';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { StorageService } from '../services/StorageService';
+import { colors, commonStyles, homeStyles } from '../styles/theme';
 import { AssetItem, Inventory, RootStackParamList } from '../types/types';
-import { commonStyles, homeStyles } from '../styles/theme';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
 type FlatAsset = AssetItem & {
   inventoryName: string;
+  inventoryId: string;
   isScanned: boolean;
 };
 
 interface ActiveFilters {
-  tipo: string; // mapeia para AssetItem.status
-  local: string; // mapeia para AssetItem.location
+  tipo: string;
+  local: string;
 }
 
 const PAGE_SIZE = 20;
@@ -67,18 +68,20 @@ export const HomeScreen = () => {
 
   // Carregar inventários (usando Result do StorageService)
   const loadInventories = useCallback(async (): Promise<Inventory[]> => {
-    const namesResult = await StorageService.getInventories();
-    if (!namesResult.ok) {
-      console.error('Erro ao listar inventários:', namesResult.error.message);
+    const idsResult = await StorageService.getInventories();
+    if (!idsResult.ok) {
+      console.error('Erro ao listar inventários:', idsResult.error.message);
       return [];
     }
-    const names = namesResult.value;
+
+    const ids = idsResult.value;
     const loaded = await Promise.all(
-      names.map(async (name) => {
-        const invResult = await StorageService.loadInventory(name);
+      ids.map(async (id) => {
+        const invResult = await StorageService.loadInventory(id);
         return invResult.ok ? invResult.value : null;
       })
     );
+
     return loaded.filter((inv): inv is Inventory => inv !== null);
   }, []);
 
@@ -88,7 +91,8 @@ export const HomeScreen = () => {
       inv.items.map((item) => ({
         ...item,
         inventoryName: inv.metadata.name,
-        isScanned: item.found,
+        inventoryId: inv.metadata.id,
+        isScanned: item.found === true,
       }))
     );
   }, []);
@@ -179,28 +183,55 @@ export const HomeScreen = () => {
     setIsEndReached(filteredAssets.length <= PAGE_SIZE);
   }, [search, filters, filteredAssets.length]);
 
-  // Navegação
+  // ==================== NAVEGAÇÃO ====================
+
+  // Navegação para detalhe do item (InventoryDetail)
   const handleOpenAsset = useCallback(
     (asset: FlatAsset) => {
-      navigation.navigate('InventoryDetail', { inventoryName: asset.inventoryName });
+      navigation.navigate('InventoryDetail', {
+        inventoryId: asset.inventoryId,
+        inventoryName: asset.inventoryName,
+      });
     },
     [navigation]
   );
 
+  // Navegação para Scanner
   const handleGoToScanner = useCallback(() => {
-    // Encontra o primeiro inventário com itens pendentes (found = false)
     const activeInventory = inventories.find((inv) => inv.items.some((item) => !item.found));
     if (activeInventory) {
       navigation.navigate('Scanner', { inventoryId: activeInventory.metadata.id });
     } else if (inventories.length > 0) {
-      // Todos completos → vai para o último inventário
       navigation.navigate('Scanner', {
         inventoryId: inventories[inventories.length - 1].metadata.id,
       });
+    } else {
+      navigation.navigate('ImportInventory');
     }
   }, [inventories, navigation]);
 
-  // Filtros
+  // Navegação para Importar CSV
+  const handleImportCSV = useCallback(() => {
+    navigation.navigate('ImportInventory');
+  }, [navigation]);
+
+  // Navegação para Cadastro Manual
+  const handleManualInventory = useCallback(() => {
+    navigation.navigate('ManualInventory');
+  }, [navigation]);
+
+  // Navegação para Relatórios
+  const handleGoToReports = useCallback(() => {
+    navigation.navigate('Reports');
+  }, [navigation]);
+
+  // Navegação para Configurações
+  const handleGoToSettings = useCallback(() => {
+    navigation.navigate('Settings');
+  }, [navigation]);
+
+  // ==================== FILTROS ====================
+
   const applyFilters = useCallback(() => {
     setFilters(pendingFilters);
     setIsFilterOpen(false);
@@ -219,8 +250,8 @@ export const HomeScreen = () => {
   if (isLoading) {
     return (
       <View style={commonStyles.loadingContainer}>
-        <StatusBar barStyle="light-content" backgroundColor="#0A0A0F" />
-        <ActivityIndicator color="#00E5A0" size="large" />
+        <StatusBar barStyle="light-content" backgroundColor={colors.bg} />
+        <ActivityIndicator color={colors.accent} size="large" />
         <Text style={commonStyles.loadingText}>Carregando patrimônio…</Text>
       </View>
     );
@@ -228,20 +259,24 @@ export const HomeScreen = () => {
 
   return (
     <View style={commonStyles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0A0A0F" />
+      <StatusBar barStyle="light-content" backgroundColor={colors.bg} />
 
-      {/* Header */}
+      {/* Header com botões de Relatórios e Configurações */}
       <View style={homeStyles.header}>
         <View>
           <Text style={homeStyles.headerTitle}>PatriScan</Text>
           <Text style={homeStyles.headerSub}>{allAssets.length} bens patrimoniais</Text>
         </View>
-        <TouchableOpacity
-          style={homeStyles.addBtn}
-          onPress={() => navigation.navigate('CreateInventory')}
-        >
-          <Text style={homeStyles.addBtnText}>＋</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          {/* Botão de Relatórios */}
+          <TouchableOpacity style={homeStyles.addBtn} onPress={handleGoToReports}>
+            <Text style={homeStyles.addBtnText}>📊</Text>
+          </TouchableOpacity>
+          {/* Botão de Configurações */}
+          <TouchableOpacity style={homeStyles.addBtn} onPress={handleGoToSettings}>
+            <Text style={homeStyles.addBtnText}>⚙️</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Busca e filtro */}
@@ -253,7 +288,7 @@ export const HomeScreen = () => {
             value={searchRaw}
             onChangeText={setSearchRaw}
             placeholder="Buscar patrimônio ou descrição…"
-            placeholderTextColor="#6B6B88"
+            placeholderTextColor={colors.textDim}
             autoCapitalize="none"
             autoCorrect={false}
             clearButtonMode="while-editing"
@@ -290,7 +325,7 @@ export const HomeScreen = () => {
         </View>
       )}
 
-      {/* Botões de ação */}
+      {/* Botões de ação - Três opções */}
       <View style={homeStyles.actionRow}>
         <TouchableOpacity
           style={[homeStyles.actionBtn, homeStyles.actionBtnPrimary]}
@@ -300,12 +335,21 @@ export const HomeScreen = () => {
           <Text style={homeStyles.actionBtnIcon}>▶</Text>
           <Text style={homeStyles.actionBtnText}>Escanear</Text>
         </TouchableOpacity>
+
         <TouchableOpacity
           style={[homeStyles.actionBtn, homeStyles.actionBtnSecondary]}
-          onPress={() => navigation.navigate('CreateInventory')}
+          onPress={handleImportCSV}
         >
-          <Text style={[homeStyles.actionBtnIcon, { color: '#00E5A0' }]}>＋</Text>
-          <Text style={[homeStyles.actionBtnText, { color: '#00E5A0' }]}>Importar CSV</Text>
+          <Text style={[homeStyles.actionBtnIcon, { color: colors.accent }]}>📄</Text>
+          <Text style={[homeStyles.actionBtnText, { color: colors.accent }]}>Importar CSV</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[homeStyles.actionBtn, homeStyles.actionBtnSecondary]}
+          onPress={handleManualInventory}
+        >
+          <Text style={[homeStyles.actionBtnIcon, { color: colors.accent }]}>✏️</Text>
+          <Text style={[homeStyles.actionBtnText, { color: colors.accent }]}>Cadastrar</Text>
         </TouchableOpacity>
       </View>
 
@@ -322,7 +366,7 @@ export const HomeScreen = () => {
       {/* Lista paginada */}
       <FlatList
         data={visibleAssets}
-        keyExtractor={(item, index) => `${item.code}-${item.inventoryName}-${index}`}
+        keyExtractor={(item, index) => `${item.code}-${item.inventoryId}-${index}`}
         renderItem={({ item }) => <AssetRow asset={item} onPress={() => handleOpenAsset(item)} />}
         contentContainerStyle={[
           homeStyles.listContent,
@@ -334,14 +378,14 @@ export const HomeScreen = () => {
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={handleRefresh}
-            tintColor="#00E5A0"
-            colors={['#00E5A0']}
+            tintColor={colors.accent}
+            colors={[colors.accent]}
           />
         }
         ListFooterComponent={
           isLoadingMore ? (
             <View style={homeStyles.footerLoader}>
-              <ActivityIndicator color="#00E5A0" size="small" />
+              <ActivityIndicator color={colors.accent} size="small" />
               <Text style={homeStyles.footerLoaderText}>Carregando mais itens…</Text>
             </View>
           ) : null
@@ -355,7 +399,7 @@ export const HomeScreen = () => {
             <Text style={homeStyles.emptyDesc}>
               {search || hasActiveFilters
                 ? 'Tente ajustar a busca ou os filtros.'
-                : 'Importe um CSV para começar.'}
+                : 'Importe um CSV ou cadastre manualmente para começar.'}
             </Text>
           </View>
         }
