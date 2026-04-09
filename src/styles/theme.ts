@@ -1039,6 +1039,12 @@ export const inventoryDetailStyles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 16,
     gap: 10,
+    zIndex: 1000, // ✅ Adicionar zIndex alto
+    elevation: 5, // ✅ Para Android (sombra)
+    shadowColor: '#000', // ✅ Sombra para destacar
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
   },
   scanFabComplete: {
     backgroundColor: colors.surface2,

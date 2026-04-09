@@ -11,7 +11,7 @@ import { RootStackParamList } from '../types/types';
 import { HomeScreen } from '../screens/HomeScreen';
 import { ImportInventoryScreen } from '../screens/ImportInventoryScreen';
 import { InventoryDetailScreen } from '../screens/InventoryDetailScreen';
-import { ManualInventoryScreen } from '../screens/MInventoryScreen';
+import { ManualInventoryScreen } from '../screens/ManualInventoryScreen';
 import { ReportDetailScreen } from '../screens/ReportDetailScreen';
 import { ReportsScreen } from '../screens/ReportsScreen';
 import { ScannerScreen } from '../screens/ScannerScreen ';
