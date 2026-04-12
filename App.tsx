@@ -13,7 +13,7 @@ import { InventoryListScreen } from './src/screens/InventoryListScreen';
 import { ManualInventoryScreen } from './src/screens/ManualInventoryScreen';
 import { ReportDetailScreen } from './src/screens/ReportDetailScreen';
 import { ReportsScreen } from './src/screens/ReportsScreen';
-import { ScannerScreen } from './src/screens/ScannerScreen ';
+import { ScannerScreen } from './src/screens/ScannerScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 

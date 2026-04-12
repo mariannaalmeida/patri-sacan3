@@ -6,9 +6,12 @@
 export type InventoryId = string;
 export type AssetCode = string;
 
+// 1. Permita que MappableField seja qualquer string, mas mantenha o autocomplete pros fixo
+
 export type MappableField = 'code' | 'description' | 'department' | 'location' | 'status' | 'value';
 
-export const isMappableField = (field: string): field is MappableField => {
+// 2. Atualize o Type Guard para verificar apenas os campos nativos do sistema
+export const isStanField = (field: string): field is MappableField => {
   return ['code', 'description', 'department', 'location', 'status', 'value'].includes(field);
 };
 
@@ -156,7 +159,7 @@ export interface PaginatedResult<T> {
  * Representa uma data serializada no formato ISO 8601.
  * Transformado em Branded Type para maior segurança.
  */
-export type ISODateString = string & { readonly __brand: unique symbol };
+export type ISODateString = string;
 
 // --- Navegation ---
 // src/types/types.ts

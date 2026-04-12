@@ -36,7 +36,7 @@ interface AlertBanner {
 export const ScannerScreen = () => {
   const navigation = useNavigation<ScannerNavProp>();
   const route = useRoute<ScannerRouteProp>();
-  const { inventoryId } = route.params;
+  const { inventoryId } = route.params ?? {};
 
   const [inventory, setInventory] = useState<Inventory | null>(null);
   const [loading, setLoading] = useState(true);
