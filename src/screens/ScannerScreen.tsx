@@ -54,26 +54,55 @@ export const ScannerScreen = () => {
   const [alerts, setAlerts] = useState<AlertBanner[]>([]);
   const alertCounter = useRef(0);
 
+  // Ref para armazenar os timeouts e evitar Memory Leaks
+  const alertTimeouts = useRef<NodeJS.Timeout[]>([]);
+
   const lastScannedCode = useRef<string>('');
   const scanCooldown = useRef(false);
 
   const lastItemAnim = useRef(new Animated.Value(0)).current;
   const [lastScanned, setLastScanned] = useState<AssetItem | null>(null);
 
-  // Carregar inventário
+  // Limpeza dos timeouts de alerta quando o componente desmontar
+  useEffect(() => {
+    return () => {
+      alertTimeouts.current.forEach(clearTimeout);
+    };
+  }, []);
+
+  // Carregar inventário com guarda e garantia de a loading state
   useEffect(() => {
     const loadInventory = async () => {
-      const result = await StorageService.loadInventory(inventoryId);
-      if (result.ok) {
-        setInventory(result.value);
-        setError(null);
-      } else {
-        setError(result.error.message);
-        Alert.alert('Erro', result.error.message);
+      // 1. Guarda do inventoryId
+      if (!inventoryId) {
+        const errMsg = 'ID do inventário não fornecido na navegação.';
+        setError(errMsg);
+        setLoading(false);
+        Alert.alert('Erro de Parâmetro', errMsg);
         navigation.goBack();
+        return;
       }
-      setLoading(false);
+
+      try {
+        const result = await StorageService.loadInventory(inventoryId);
+        if (result.ok) {
+          setInventory(result.value);
+          setError(null);
+        } else {
+          setError(result.error.message);
+          Alert.alert('Erro', result.error.message);
+          navigation.goBack();
+        }
+      } catch (err) {
+        const unexpectedError = 'Falha inesperada ao tentar carregar o inventário.';
+        setError(unexpectedError);
+        Alert.alert('Erro Crítico', unexpectedError);
+        navigation.goBack();
+      } finally {
+        setLoading(false);
+      }
     };
+
     loadInventory();
   }, [inventoryId, navigation]);
 
@@ -88,13 +117,16 @@ export const ScannerScreen = () => {
     }
   }, [mode, permission, requestPermission]);
 
-  // Alertas
+  // Alertas com controle de memória
   const showAlert = useCallback((type: AlertBanner['type'], message: string) => {
     const id = ++alertCounter.current;
     setAlerts((prev) => [...prev.slice(-2), { id, type, message }]);
-    setTimeout(() => {
+
+    const timeoutId = setTimeout(() => {
       setAlerts((prev) => prev.filter((a) => a.id !== id));
     }, 3500);
+
+    alertTimeouts.current.push(timeoutId);
   }, []);
 
   // Animação do último item
