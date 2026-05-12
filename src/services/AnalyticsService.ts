@@ -6,7 +6,8 @@
  * ReportService, ChartService e as telas de relatório.
  */
 
-import { AssetItem, Inventory } from '../types/types';
+import { AssetItem, Inventory, isScannedItem } from '../types/types';
+import { formatDisplayDate, formatDisplayTime } from '../utils/dateUtils';
 
 // ─── Tipos de saída ───────────────────────────────────────────────────────────
 
@@ -57,12 +58,10 @@ export class AnalyticsService {
    */
   static compute(inventory: Inventory): InventoryReport {
     // Separa itens encontrados (found === true) e não encontrados
-    const foundItems = inventory.items.filter(
-      (item): item is AssetItem & { found: true; scanDate: string } => item.found === true
-    );
-    const notFoundItems = inventory.items.filter((item) => item.found === false);
+    const foundItems = inventory.items.filter(isScannedItem);
+    const notFoundItems = inventory.items.filter((item) => !item.found);
 
-    const overall = this.computeOverall(inventory);
+    const overall = this.computeOverall(inventory, foundItems);
     const byDepartment = this.computeByGroup(inventory, 'department');
     const byLocation = this.computeByGroup(inventory, 'location');
     const scanTimeline = this.computeTimeline(foundItems, overall.startedAt);
@@ -81,17 +80,16 @@ export class AnalyticsService {
 
   // ─── Overall ───────────────────────────────────────────────────────────────
 
-  private static computeOverall(inventory: Inventory): OverallStats {
+  private static computeOverall(
+    inventory: Inventory,
+    foundItems: (AssetItem & { found: true; scanDate: string })[]
+  ): OverallStats {
     const total = inventory.items.length;
-    const found = inventory.items.filter((i) => i.found).length;
+    const found = foundItems.length;
     const pending = total - found;
     const progressPct = total > 0 ? Math.round((found / total) * 100) : 0;
 
-    // Datas a partir dos scanDates dos itens encontrados
-    const dates = inventory.items
-      .filter((i): i is AssetItem & { found: true; scanDate: string } => i.found === true)
-      .map((i) => new Date(i.scanDate).getTime())
-      .sort((a, b) => a - b);
+    const dates = foundItems.map((i) => new Date(i.scanDate).getTime()).sort((a, b) => a - b);
 
     const startedAt = dates.length > 0 ? new Date(dates[0]).toISOString() : null;
     const completedAt =
@@ -104,15 +102,7 @@ export class AnalyticsService {
         ? Math.round((dates[dates.length - 1] - dates[0]) / 60000)
         : null;
 
-    return {
-      total,
-      found,
-      pending,
-      progressPct,
-      startedAt,
-      completedAt,
-      durationMinutes,
-    };
+    return { total, found, pending, progressPct, startedAt, completedAt, durationMinutes };
   }
 
   // ─── Agrupamento por campo ─────────────────────────────────────────────────
@@ -154,7 +144,7 @@ export class AnalyticsService {
     const startMs = startedAt ? new Date(startedAt).getTime() : null;
 
     return foundItems
-      .slice() // cria cópia para não modificar original
+      .slice()
       .sort((a, b) => new Date(a.scanDate).getTime() - new Date(b.scanDate).getTime())
       .map((item) => {
         const scanMs = new Date(item.scanDate).getTime();
@@ -169,24 +159,17 @@ export class AnalyticsService {
       });
   }
 
-  // ─── Helpers de formatação (usados pelas telas e pelo export) ──────────────
+  // ─── Helpers de formatação (wrappers dos utilitários) ─────────────────────
 
   static formatDate(iso: string): string {
-    return new Date(iso).toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    });
+    return formatDisplayDate(iso);
   }
 
   static formatTime(iso: string): string {
-    return new Date(iso).toLocaleTimeString('pt-BR', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    return formatDisplayTime(iso);
   }
 
   static formatDateTime(iso: string): string {
-    return `${this.formatDate(iso)} às ${this.formatTime(iso)}`;
+    return `${formatDisplayDate(iso)} às ${formatDisplayTime(iso)}`;
   }
 }

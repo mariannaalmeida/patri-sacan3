@@ -1,8 +1,16 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Directory, File, Paths } from 'expo-file-system';
-import { AssetItem, Inventory, InventoryMetadata, InventoryStats, Result } from '../types/types';
+import {
+  AssetItem,
+  Inventory,
+  InventoryMetadata,
+  InventoryStats,
+  Result,
+  InventorySchema,
+} from '../types/types';
 import { toISODate } from '../utils/dateUtils';
 import { handleServiceError } from '../utils/errorUtils';
+import { isScannedItem } from '../types/types';
 
 const STORAGE_KEYS = {
   INVENTORIES_INDEX: '@patri_sacan3:inventories_index',
@@ -57,12 +65,6 @@ export class StorageService {
     if (!root.exists) {
       root.create({ intermediates: true, idempotent: true });
     }
-  }
-
-  private static isFoundItem(
-    item: AssetItem
-  ): item is AssetItem & { found: true; scanDate: string } {
-    return item.found === true;
   }
 
   // Validação de ID (security)
@@ -154,8 +156,9 @@ export class StorageService {
 
       const itemsFile = new File(dir, 'items.json');
       const metadataFile = new File(dir, 'metadata.json');
+      const schemaFile = new File(dir, 'schema.json'); //  NOVO: Criar arquivo do schema
 
-      // ✅ Usa toISODate para garantir o tipo ISODateString
+      //  Usa toISODate para garantir o tipo ISODateString
       const metadataWithTimestamp = {
         ...inventory.metadata,
         lastModified: toISODate(new Date()),
@@ -164,6 +167,7 @@ export class StorageService {
       await Promise.all([
         itemsFile.write(JSON.stringify(inventory.items, null, 2)),
         metadataFile.write(JSON.stringify(metadataWithTimestamp, null, 2)),
+        schemaFile.write(JSON.stringify(inventory.schema, null, 2)),
       ]);
 
       const listResult = await this.getInventories();
@@ -189,20 +193,31 @@ export class StorageService {
         const dir = this.getInventoryDirectory(id);
         const itemsFile = new File(dir, 'items.json');
         const metadataFile = new File(dir, 'metadata.json');
+        const schemaFile = new File(dir, 'schema.json'); //  NOVO: Referência ao schema
 
         if (!itemsFile.exists || !metadataFile.exists) {
           throw new Error(`Arquivos do inventário (ID: ${id}) não encontrados.`);
         }
 
-        const [itemsRaw, metadataRaw] = await Promise.all([itemsFile.text(), metadataFile.text()]);
+        //  NOVO: Lê o schema se existir, senão retorna um JSON de fallback vazio
+        const [itemsRaw, metadataRaw, schemaRaw] = await Promise.all([
+          itemsFile.text(),
+          metadataFile.text(),
+          schemaFile.exists ? schemaFile.text() : Promise.resolve('{"version":"1.0","fields":[]}'),
+        ]);
 
         const items = this.safeJSONParse<AssetItem[]>(itemsRaw, []);
         const metadata = this.safeJSONParseOrThrow<InventoryMetadata>(
           metadataRaw,
           `metadados do inventário ID: ${id}`
         );
+        //  NOVO: Faz o parse do schema de forma segura
+        const schema = this.safeJSONParse<InventorySchema>(schemaRaw, {
+          version: '1.0',
+          fields: [],
+        });
 
-        return { items, metadata };
+        return { items, metadata, schema };
       },
       'STORAGE_READ_FAILED',
       { inventoryId: id }
@@ -241,7 +256,7 @@ export class StorageService {
 
         const inventory = loadResult.value;
         inventory.metadata.name = newName;
-        // ✅ Usa toISODate para garantir o tipo ISODateString
+        //  Usa toISODate para garantir o tipo ISODateString
         inventory.metadata.lastModified = toISODate(new Date());
 
         await this.saveInventory(inventory);
@@ -274,7 +289,7 @@ export class StorageService {
 
         if (found) {
           const finalScanDate = scanDate ? toISODate(new Date(scanDate)) : toISODate(new Date());
-          if (this.isFoundItem(originalItem)) {
+          if (isScannedItem(originalItem)) {
             updatedItem = { ...originalItem, scanDate: finalScanDate };
           } else {
             updatedItem = {
@@ -284,7 +299,7 @@ export class StorageService {
             };
           }
         } else {
-          if (this.isFoundItem(originalItem)) {
+          if (isScannedItem(originalItem)) {
             const { scanDate: _, ...base } = originalItem;
             updatedItem = { ...base, found: false };
           } else {
@@ -302,7 +317,7 @@ export class StorageService {
     );
   }
 
-  // ✅ Método corrigido - getInventoryStats
+  // Método corrigido - getInventoryStats
   static async getInventoryStats(id: string): Promise<Result<InventoryStats>> {
     return handleServiceError(
       async () => {
@@ -346,7 +361,12 @@ export class StorageService {
           importDate: now,
           totalItems: items.length,
           status: 'active',
-          lastModified: now, // ✅ Agora é ISODateString
+          lastModified: now, //  ISODateString
+        },
+        // NOVO: Adicionado o schema padrão para satisfazer a interface Inventory
+        schema: {
+          version: '1.0',
+          fields: [],
         },
       };
 
@@ -372,20 +392,30 @@ export class StorageService {
     );
   }
 
-  // Import de inventário
+  // Import de inventário com proteção para dados antigos
   static async importInventory(jsonData: string): Promise<Result<Inventory>> {
     return handleServiceError(async () => {
       const inventory = this.safeJSONParseOrThrow<Inventory>(jsonData, 'importação');
 
-      // Gera novo ID para evitar conflitos
+      // PROTEÇÃO: Se o backup for de uma versão antiga e não tiver schema,
+      // inicializamos com um padrão para evitar erros de tipagem/execução.
+      if (!inventory.schema) {
+        inventory.schema = {
+          version: '1.0',
+          fields: [],
+        };
+      }
+
+      // Gera novo ID para evitar conflitos com inventários existentes no aparelho
       const newId = this.generateInventoryId();
       const now = toISODate(new Date());
 
       inventory.metadata.id = newId;
       inventory.metadata.importDate = now;
       inventory.metadata.status = 'active';
-      inventory.metadata.lastModified = now; // ✅ Agora é ISODateString
+      inventory.metadata.lastModified = now;
 
+      // Salva usando o método padrão que já lida com a escrita do schema.json
       const saveResult = await this.saveInventory(inventory);
       if (!saveResult.ok) throw saveResult.error;
 

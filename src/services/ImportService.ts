@@ -14,10 +14,11 @@ import {
 import { toISODate } from '../utils/dateUtils';
 import { handleServiceError } from '../utils/errorUtils';
 import { StorageService } from './StorageService';
+import { generateBasicSchema } from '../utils/schemaUtils';
 
 export class ImportService {
   /**
-   * 1. Selecionar o arquivo CSV do dispositivo
+   *  Selecionar o arquivo CSV do dispositivo
    */
   static async pickCSVFile(): Promise<Result<DocumentPicker.DocumentPickerResult | null>> {
     return handleServiceError(async () => {
@@ -30,7 +31,7 @@ export class ImportService {
   }
 
   /**
-   * 2. Ler e parsear o conteúdo do CSV
+   *  Ler e parsear o conteúdo do CSV
    */
   static async parseCSVFile(uri: string): Promise<
     Result<{
@@ -68,7 +69,7 @@ export class ImportService {
   }
 
   /**
-   * 3. Sugerir mapeamento de colunas baseado em heurística
+   *  Sugerir mapeamento de colunas baseado em heurística
    */
   static suggestColumnMapping(headers: string[]): ColumnMapping[] {
     const fieldKeywords: Partial<Record<MappableField, string[]>> = {
@@ -118,7 +119,7 @@ export class ImportService {
   }
 
   /**
-   * 4. Validar os dados do CSV contra o mapeamento fornecido
+   *  Validar os dados do CSV contra o mapeamento fornecido
    */
   static validateCSVData(
     data: Record<string, string>[],
@@ -208,7 +209,7 @@ export class ImportService {
   }
 
   /**
-   * ✅ Converter string de status para AssetStatus válido
+   * Converter string de status para AssetStatus válido
    */
   private static normalizeStatus(status: string): AssetStatus {
     const statusMap: Record<string, AssetStatus> = {
@@ -233,11 +234,11 @@ export class ImportService {
     };
 
     const normalized = status.toLowerCase().trim();
-    return statusMap[normalized] || 'good'; // ✅ default para 'good'
+    return statusMap[normalized] || 'good'; //  default para 'good'
   }
 
   /**
-   * 5. Converter dados do CSV para AssetItem (com found: false inicialmente)
+   *  Converter dados do CSV para AssetItem (com found: false inicialmente)
    */
   static convertToAssetItems(
     data: Record<string, string>[],
@@ -250,9 +251,10 @@ export class ImportService {
         description: '',
         department: '',
         location: '',
-        status: 'good', // ✅ Status padrão válido
+        status: 'good', //  Status padrão válido
         value: undefined,
         importDate: undefined,
+        customFields: {}, // Inicializa vazio
       };
 
       for (const [csvCol, assetField] of Object.entries(mapping)) {
@@ -260,17 +262,25 @@ export class ImportService {
         if (rawValue !== undefined && rawValue !== null && rawValue !== '') {
           const strValue = rawValue.toString().trim();
           switch (assetField) {
+            case 'code':
+            case 'description':
+            case 'department':
+            case 'location':
+              base[assetField] = strValue;
+              break;
             case 'value':
               const numericStr = strValue.replace(/\./g, '').replace(',', '.');
               const num = parseFloat(numericStr);
               if (!isNaN(num)) base.value = num;
               break;
             case 'status':
-              base.status = this.normalizeStatus(strValue); // ✅ Normaliza status
+              base.status = this.normalizeStatus(strValue);
               break;
             default:
-              // @ts-ignore - atribuição dinâmica segura
-              base[assetField] = strValue;
+              //  Tudo que não for nativo, cai aqui nos campos customizados!
+              if (base.customFields) {
+                base.customFields[assetField] = strValue;
+              }
           }
         }
       }
@@ -279,23 +289,27 @@ export class ImportService {
     });
   }
 
+ 
   /**
-   * 6. Criar inventário a partir dos itens convertidos e salvar no Storage
+   *  Criar inventário a partir dos itens convertidos e salvar no Storage
    */
   static async createInventoryFromCSV(
     name: string,
     items: AssetItem[]
   ): Promise<Result<Inventory>> {
     return handleServiceError(async () => {
+      //  Gera o schema a partir dos itens
+      const schema = generateBasicSchema(items);
       const inventory: Inventory = {
         metadata: {
-          id: StorageService.generateInventoryId(), // ✅ Usar o gerador de ID
+          id: StorageService.generateInventoryId(), // Usar o gerador de ID
           name,
           importDate: toISODate(new Date()),
           totalItems: items.length,
           status: 'active',
         },
         items,
+        schema, //  Inclui o schema obrigatório
       };
 
       const saveResult = await StorageService.saveInventory(inventory);
