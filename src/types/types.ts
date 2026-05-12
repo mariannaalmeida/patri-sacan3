@@ -6,12 +6,20 @@
 export type InventoryId = string;
 export type AssetCode = string;
 
-// 1. Permita que MappableField seja qualquer string, mas mantenha o autocomplete pros fixo
+// Mantém autocomplete para os fixos e permite strings customizadas
 
-export type MappableField = 'code' | 'description' | 'department' | 'location' | 'status' | 'value';
+export type KnownFields =
+  | 'code'
+  | 'description'
+  | 'department'
+  | 'location'
+  | 'status'
+  | 'value';
 
-// 2. Atualize o Type Guard para verificar apenas os campos nativos do sistema
-export const isStanField = (field: string): field is MappableField => {
+export type MappableField = KnownFields | (string & {});
+
+// Type Guard: Retorna true e ensina ao compilador que a string pertence aos campos nativos
+export const isStandardField = (field: string): field is KnownFields => {
   return ['code', 'description', 'department', 'location', 'status', 'value'].includes(field);
 };
 
@@ -25,11 +33,17 @@ export interface AssetItemBase {
   status: AssetStatus;
   value?: number;
   importDate?: ISODateString;
+  /**
+   * Campos dinâmicos definidos pelo usuário (Marca, Modelo, Cor, N° de Série…).
+   * Segue o padrão EAV — qualquer string pode ser chave.
+   */
+  customFields?: Record<string, string>;
 }
 
 export type AssetItem =
   | (AssetItemBase & { found: true; scanDate: ISODateString })
   | (AssetItemBase & { found: false; scanDate?: never });
+
 
 export interface InventoryMetadata {
   id: InventoryId;
@@ -45,7 +59,7 @@ export interface InventoryMetadata {
 export interface Inventory {
   metadata: InventoryMetadata;
   items: AssetItem[];
-  schema?: InventorySchema;
+  schema: InventorySchema;
   stats?: InventoryStats;
 }
 
@@ -111,7 +125,7 @@ export interface ColumnMappingScreenProps {
   headers: string[];
   rawData: Record<string, string | number | boolean | null>[];
   inventoryName: string;
-  onComplete: (mapping: Record<string, keyof AssetItem>) => void;
+  onComplete: (mapping: Record<string, MappableField>) => void;
 }
 
 // ---  Dynamic Schema ---
@@ -199,6 +213,10 @@ export type RootStackParamList = {
   About: undefined;
 };
 
+
+
+
+
 // --- Export ---
 export type ExportFormat = 'csv_found' | 'csv_pending' | 'csv_full' | 'pdf' | 'xlsx' | 'json';
 
@@ -224,6 +242,8 @@ export type AppErrorCode =
   | 'STORAGE_READ_FAILED'
   | 'STORAGE_DELETE_FAILED'
   | 'STORAGE_NOT_FOUND'
+
+  
   // Importação
   | 'IMPORT_INVALID_FILE'
   | 'IMPORT_PARSE_FAILED'
@@ -272,3 +292,7 @@ export function unknownToAppError(cause: unknown, code: AppErrorCode = 'UNKNOWN'
  *   if (!result.ok) { Alert.alert('Erro', result.error.message) }
  */
 export type Result<T> = { ok: true; value: T } | { ok: false; error: AppError };
+
+export function isScannedItem(item: AssetItem): item is AssetItem & { found: true } {
+  return item.found === true;
+}

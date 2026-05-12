@@ -3,14 +3,29 @@ import { Platform, StyleSheet } from 'react-native';
 
 // Cores do sistema
 export const colors = {
+  // Cores de destaque (uso geral)
   accent: '#00E5A0',
   accentWarn: '#FFB830',
   accentErr: '#FF4D6D',
+  primary: '#534AB7',
+
+  // Cores semânticas (feedback ao usuário)
+  success: '#4CAF50', // Verde sucesso
+  warning: '#FFB830', // Amarelo/âmbar para avisos (pode usar o mesmo de accentWarn)
+  error: '#FF4D6D', // Vermelho erro (pode usar o mesmo de accentErr)
+  info: '#2196F3', // Azul informativo
+
+  // Fundo e superfícies
   bg: '#0A0A0F',
   surface: '#14141C',
   surface2: '#1E1E2A',
+
+  // Texto
   text: '#F0F0F8',
   textDim: '#6B6B88',
+
+  // Bordas
+  border: '#ffffff0A',
 } as const;
 
 // Estilos comuns (reutilizáveis)
@@ -169,6 +184,9 @@ export const scannerStyles = StyleSheet.create({
     gap: 6,
   },
   alertBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 10,
@@ -742,10 +760,6 @@ export const inventoryDetailStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.accent + '44',
   },
-  reportBtnText: {
-    fontSize: 16,
-    color: colors.accent,
-  },
   loadingContainer: {
     flex: 1,
     backgroundColor: colors.bg,
@@ -797,10 +811,6 @@ export const inventoryDetailStyles = StyleSheet.create({
     height: 36,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  resetBtnText: {
-    fontSize: 20,
-    color: colors.textDim,
   },
   statsSection: {
     backgroundColor: colors.surface,
@@ -901,7 +911,9 @@ export const inventoryDetailStyles = StyleSheet.create({
     gap: 8,
   },
   searchIcon: {
-    fontSize: 14,
+    // fontSize: 14,
+    // Se precisar, mas geralmente não é necessário com alignItems: 'center'
+    // lineHeight: 20
   },
   searchInput: {
     flex: 1,
@@ -944,8 +956,11 @@ export const inventoryDetailStyles = StyleSheet.create({
     flex: 1,
   },
   emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: 60,
+    paddingVertical: 40,
+    gap: 12,
   },
   emptyIcon: {
     fontSize: 40,
@@ -990,12 +1005,6 @@ export const inventoryDetailStyles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: colors.text,
-  },
-  scannedBadge: {
-    backgroundColor: colors.accent + '22',
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
   },
   scannedBadgeText: {
     fontSize: 10,
@@ -1051,15 +1060,45 @@ export const inventoryDetailStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.accent + '55',
   },
-  scanFabIcon: {
-    fontSize: 16,
-    color: '#000',
-    fontWeight: '800',
-  },
   scanFabLabel: {
     fontSize: 16,
     color: '#000',
     fontWeight: '800',
+  },
+  scanFabLabelComplete: {
+    color: colors.accent, // texto verde sobre fundo escuro
+  },
+  scannedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(76, 175, 80, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+  },
+
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  customFieldsContainer: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  customFieldRow: {
+    flexDirection: 'row',
+    marginBottom: 2,
+  },
+  customFieldKey: {
+    fontWeight: '600',
+    color: colors.textDim,
+    marginRight: 4,
+  },
+  customFieldValue: {
+    color: colors.text,
   },
 });
 
@@ -1451,7 +1490,7 @@ export const homeStyles = StyleSheet.create({
   },
 });
 
-// Adicione após homeStyles
+// Adicione após  reportDetailStyles
 export const reportDetailStyles = StyleSheet.create({
   iconBtn: {
     width: 36,
@@ -2212,6 +2251,11 @@ export const reportsStyles = StyleSheet.create({
     color: colors.textDim,
     marginBottom: 10,
   },
+  durationText: {
+    fontSize: 12,
+    color: colors.textDim, // ou '#9B9BAA' dependendo de como está o seu arquivo
+    marginLeft: 4,
+  },
   actions: {
     flexDirection: 'row',
     gap: 8,
@@ -2236,9 +2280,6 @@ export const reportsStyles = StyleSheet.create({
     fontWeight: '600',
   },
 });
-// src/styles/theme.ts
-
-// Adicione ao final do arquivo:
 
 export const manualInventoryStyles = StyleSheet.create({
   backBtn: {
@@ -2418,8 +2459,6 @@ export const manualInventoryStyles = StyleSheet.create({
   },
 });
 
-// src/styles/theme.ts (adicione no final)
-
 export const settingsStyles = StyleSheet.create({
   header: {
     flexDirection: 'row',
@@ -2520,5 +2559,103 @@ export const aboutStyles = StyleSheet.create({
     color: colors.text,
     textAlign: 'center',
     lineHeight: 24,
+  },
+});
+
+export const localStyles = StyleSheet.create({
+  hint: {
+    color: colors.textDim,
+    fontSize: 12,
+    marginBottom: 10,
+    lineHeight: 18,
+  },
+
+  // Schema field row
+  schemaFieldRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  schemaFieldName: {
+    flex: 1,
+    color: colors.text,
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  removeFieldBtn: {
+    color: colors.accentWarn,
+    fontSize: 16,
+    paddingHorizontal: 4,
+  },
+
+  // Add field row
+  addFieldRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+    alignItems: 'center',
+  },
+  addFieldInput: {
+    flex: 1,
+    marginBottom: 0,
+  },
+  addFieldBtn: {
+    backgroundColor: colors.accent ?? colors.primary,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 8,
+    justifyContent: 'center',
+  },
+  addFieldBtnText: {
+    color: '#000',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+
+  // Status chips
+  statusRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
+  statusChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  statusChipActive: {
+    borderColor: colors.accent ?? colors.primary,
+    backgroundColor: colors.accent ?? colors.primary,
+  },
+  statusChipText: {
+    color: colors.textDim,
+    fontSize: 12,
+  },
+  statusChipTextActive: {
+    color: '#000',
+    fontWeight: '700',
+  },
+
+  // Custom fields section separator
+  customFieldsSection: {
+    marginTop: 14,
+    paddingTop: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+  },
+  customFieldsSectionTitle: {
+    color: colors.textDim,
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 10,
   },
 });
