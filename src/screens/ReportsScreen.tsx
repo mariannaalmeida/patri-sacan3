@@ -18,8 +18,9 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { AnalyticsService, InventoryReport } from '../services/AnalyticsService';
-import { CSVExportService } from '../services/CSVExportService';
+import { CSVExportService } from '../services/CsvExportService';
 import { ReportService } from '../services/ReportService';
 import { StorageService } from '../services/StorageService';
 import { colors, reportsStyles } from '../styles/theme';
@@ -41,7 +42,7 @@ export const ReportsScreen = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [exportingId, setExportingId] = useState<string | null>(null);
 
-  // ─── Carregamento ────────────────────────────────────────────────────────
+  // Carregamento
 
   const loadReports = useCallback(async (silent = false) => {
     if (!silent) setIsLoading(true);
@@ -60,6 +61,7 @@ export const ReportsScreen = () => {
 
           const inventory = invResult.value;
           const report = AnalyticsService.compute(inventory);
+
           return { inventory, report };
         })
       );
@@ -80,7 +82,7 @@ export const ReportsScreen = () => {
     }, [loadReports])
   );
 
-  // ─── Navegações ───────────────────────────────────────────────────────────
+  //  Navegações
 
   const handleGoBack = () => {
     navigation.goBack();
@@ -94,7 +96,7 @@ export const ReportsScreen = () => {
     navigation.navigate('Settings');
   };
 
-  // ─── Exportações ─────────────────────────────────────────────────────────
+  //  Exportações
 
   const withExportResultGuard = useCallback(async (id: string, fn: () => Promise<Result<void>>) => {
     setExportingId(id);
@@ -129,24 +131,24 @@ export const ReportsScreen = () => {
       Alert.alert('Exportar CSV', 'Qual versão do CSV deseja exportar?', [
         { text: 'Cancelar', style: 'cancel' },
         {
-          text: '📋 Encontrados',
+          text: 'Encontrados',
           onPress: () =>
             withExportResultGuard(`csv-found-${row.inventory.metadata.id}`, () =>
-              CSVExportService.exportFound(row.report)
+              CSVExportService.exportFound(row.report, row.inventory.schema)
             ),
         },
         {
-          text: '⚠️ Não encontrados',
+          text: 'Não encontrados',
           onPress: () =>
             withExportResultGuard(`csv-pending-${row.inventory.metadata.id}`, () =>
-              CSVExportService.exportPending(row.report)
+              CSVExportService.exportPending(row.report, row.inventory.schema)
             ),
         },
         {
-          text: '📊 Completo',
+          text: 'Completo',
           onPress: () =>
             withExportResultGuard(`csv-full-${row.inventory.metadata.id}`, () =>
-              CSVExportService.exportFull(row.report)
+              CSVExportService.exportFull(row.report, row.inventory.schema)
             ),
         },
       ]);
@@ -163,7 +165,7 @@ export const ReportsScreen = () => {
     [withExportVoidGuard]
   );
 
-  // ─── Loading ──────────────────────────────────────────────────────────────
+  //  Loading
 
   if (isLoading) {
     return (
@@ -175,7 +177,7 @@ export const ReportsScreen = () => {
     );
   }
 
-  // ─── Render ───────────────────────────────────────────────────────────────
+  //  Render
 
   return (
     <View style={styles.container}>
@@ -184,7 +186,7 @@ export const ReportsScreen = () => {
       {/* Header com navegação completa */}
       <View style={styles.header}>
         <TouchableOpacity onPress={handleGoBack} style={styles.backBtn}>
-          <Text style={styles.backBtnText}>←</Text>
+          <Ionicons name="arrow-back" size={22} color={colors.text} />
         </TouchableOpacity>
 
         <View style={styles.headerCenter}>
@@ -196,10 +198,10 @@ export const ReportsScreen = () => {
 
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <TouchableOpacity onPress={handleGoToHome} style={styles.iconBtn}>
-            <Text style={styles.iconBtnText}>🏠</Text>
+            <Ionicons name="home-outline" size={20} color={colors.accent} />
           </TouchableOpacity>
           <TouchableOpacity onPress={handleGoToSettings} style={styles.iconBtn}>
-            <Text style={styles.iconBtnText}>⚙️</Text>
+            <Ionicons name="settings-outline" size={20} color={colors.accent} />
           </TouchableOpacity>
         </View>
       </View>
@@ -235,7 +237,7 @@ export const ReportsScreen = () => {
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>📊</Text>
+            <Ionicons name="bar-chart-outline" size={48} color={colors.textDim} />
             <Text style={styles.emptyTitle}>Nenhum relatório disponível</Text>
             <Text style={styles.emptyDesc}>
               Importe um inventário ou cadastre manualmente para ver os relatórios.
@@ -245,13 +247,15 @@ export const ReportsScreen = () => {
                 style={styles.emptyBtn}
                 onPress={() => navigation.navigate('ImportInventory')}
               >
-                <Text style={styles.emptyBtnText}>📄 Importar CSV</Text>
+                <Ionicons name="document-attach-outline" size={18} color={colors.accent} />
+                <Text style={styles.emptyBtnText}> Importar CSV</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.emptyBtn}
                 onPress={() => navigation.navigate('ManualInventory')}
               >
-                <Text style={styles.emptyBtnText}>✏️ Cadastrar</Text>
+                <Ionicons name="create-outline" size={18} color={colors.accent} />
+                <Text style={styles.emptyBtnText}> Cadastrar</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -272,11 +276,12 @@ interface ReportCardProps {
   onPDF: () => void;
 }
 
-const ReportCard = ({ row, isExporting, onView, onCSV, onPDF }: ReportCardProps) => {
+const ReportCard = React.memo(({ row, isExporting, onView, onCSV, onPDF }: ReportCardProps) => {
   const styles = reportsStyles;
   const { report } = row;
   const { overall } = report;
   const isComplete = overall.progressPct === 100;
+  const safePct = Number.isFinite(overall.progressPct) ? overall.progressPct : 0;
 
   return (
     <TouchableOpacity style={styles.card} onPress={onView} activeOpacity={0.75}>
@@ -295,7 +300,7 @@ const ReportCard = ({ row, isExporting, onView, onCSV, onPDF }: ReportCardProps)
             </View>
           ) : (
             <View style={styles.badgeInProgress}>
-              <Text style={styles.badgeInProgressText}>{overall.progressPct}%</Text>
+              <Text style={styles.badgeInProgressText}>{safePct}%</Text>
             </View>
           )}
         </View>
@@ -312,7 +317,7 @@ const ReportCard = ({ row, isExporting, onView, onCSV, onPDF }: ReportCardProps)
           <View
             style={[
               styles.progressFill,
-              { width: `${overall.progressPct}%` },
+              { width: `${safePct}%` },
               isComplete && styles.progressFillComplete,
             ]}
           />
@@ -320,15 +325,20 @@ const ReportCard = ({ row, isExporting, onView, onCSV, onPDF }: ReportCardProps)
 
         {/* Duração */}
         {overall.durationMinutes !== null && (
-          <Text style={styles.duration}>
-            🕐 Duração: {overall.durationMinutes} min · {report.scanTimeline.length} scans
-          </Text>
+          <View style={styles.duration}>
+            <Ionicons name="time-outline" size={14} color={colors.textDim} />
+            <Text style={styles.durationText}>
+              {' '}
+              Duração: {overall.durationMinutes} min · {report.scanTimeline.length} scans
+            </Text>
+          </View>
         )}
 
         {/* Ações de exportação */}
         <View style={styles.actions}>
           <TouchableOpacity style={styles.actionBtn} onPress={onView}>
-            <Text style={styles.actionBtnText}>📊 Ver detalhes</Text>
+            <Ionicons name="bar-chart-outline" size={16} color={colors.accent} />
+            <Text style={styles.actionBtnText}> Ver detalhes</Text>
           </TouchableOpacity>
 
           {isExporting ? (
@@ -338,7 +348,8 @@ const ReportCard = ({ row, isExporting, onView, onCSV, onPDF }: ReportCardProps)
           ) : (
             <>
               <TouchableOpacity style={[styles.actionBtn, styles.actionBtnExport]} onPress={onCSV}>
-                <Text style={[styles.actionBtnText, { color: colors.accent }]}>↓ CSV</Text>
+                <Ionicons name="download-outline" size={16} color={colors.accent} />
+                <Text style={[styles.actionBtnText, { color: colors.accent }]}> CSV</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.actionBtn, styles.actionBtnExport]} onPress={onPDF}>
                 <Text style={[styles.actionBtnText, { color: colors.accentWarn }]}>↓ PDF</Text>
@@ -349,7 +360,7 @@ const ReportCard = ({ row, isExporting, onView, onCSV, onPDF }: ReportCardProps)
       </View>
     </TouchableOpacity>
   );
-};
+});
 
 // ─── Sub-componente: mini stat ────────────────────────────────────────────────
 

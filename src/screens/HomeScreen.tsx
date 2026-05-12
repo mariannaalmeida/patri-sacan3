@@ -10,6 +10,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   ActivityIndicator,
   FlatList,
   Modal,
@@ -71,6 +72,7 @@ export const HomeScreen = () => {
     const idsResult = await StorageService.getInventories();
     if (!idsResult.ok) {
       console.error('Erro ao listar inventários:', idsResult.error.message);
+      Alert.alert('Erro', 'Não foi possível carregar os inventários.');
       return [];
     }
 
@@ -171,11 +173,11 @@ export const HomeScreen = () => {
     if (nextCount >= filteredAssets.length) {
       setIsEndReached(true);
     }
-    setIsLoadingMore(true);
-    setTimeout(() => {
+    // Use requestAnimationFrame ou apenas setPage diretamente
+    requestAnimationFrame(() => {
       setPage(nextPage);
       setIsLoadingMore(false);
-    }, 150);
+    });
   }, [page, filteredAssets.length, isLoadingMore, isEndReached]);
 
   useEffect(() => {

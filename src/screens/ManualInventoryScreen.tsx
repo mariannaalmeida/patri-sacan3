@@ -3,6 +3,7 @@
  *
  * Tela para cadastro manual de inventário, item por item.
  * Útil para pequenos inventários ou quando não há arquivo CSV.
+ * Suporte completo a campos dinâmicos (EAV / Dynamic Schema)
  */
 
 import { useNavigation } from '@react-navigation/native';
@@ -20,12 +21,25 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { StorageService } from '../services/StorageService';
-import { colors, manualInventoryStyles } from '../styles/theme';
-import { AssetItem, AssetStatus, RootStackParamList } from '../types/types';
+import { colors, manualInventoryStyles, localStyles } from '../styles/theme';
+import { AssetItem, AssetStatus, RootStackParamList, Inventory } from '../types/types';
 import { toISODate } from '../utils/dateUtils';
+import { parseBrazilianCurrencySafe } from '../utils/currencyUtils';
+import { generateBasicSchema } from '../utils/schemaUtils';
+
+
+
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+
+// ─── Tipos internos da tela ───────────────────────────────────────────────────
+
+interface CustomFieldDef {
+  id: string;
+  name: string;
+}
 
 interface ManualItem {
   id: string;
@@ -35,135 +49,163 @@ interface ManualItem {
   location: string;
   status: AssetStatus;
   value: string;
+  customFields: Record<string, string>;
 }
 
+// ─── Constantes ───────────────────────────────────────────────────────────────
+
 const STATUS_OPTIONS: { label: string; value: AssetStatus }[] = [
-  { label: '✅ Bom', value: 'good' },
-  { label: '⚠️ Danificado', value: 'damaged' },
-  { label: '❌ Extraviado', value: 'missing' },
-  { label: '🔧 Em Manutenção', value: 'in_repair' },
+  { label: 'Bom', value: 'good' },
+  { label: 'Danificado', value: 'damaged' },
+  { label: 'Extraviado', value: 'missing' },
+  { label: 'Em Manutenção', value: 'in_repair' },
 ];
+
+const createEmptyItem = (): ManualItem => ({
+  id: Date.now().toString() + Math.random().toString(36).slice(2),
+  code: '',
+  description: '',
+  department: '',
+  location: '',
+  status: 'good',
+  value: '',
+  customFields: {},
+});
+
+// ─── Componente principal ─────────────────────────────────────────────────────
 
 export const ManualInventoryScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const styles = manualInventoryStyles;
 
   const [inventoryName, setInventoryName] = useState('');
-  const [items, setItems] = useState<ManualItem[]>([
-    {
-      id: '1',
-      code: '',
-      description: '',
-      department: '',
-      location: '',
-      status: 'good',
-      value: '',
-    },
-  ]);
+  const [schemaFields, setSchemaFields] = useState<CustomFieldDef[]>([]);
+  const [newFieldName, setNewFieldName] = useState('');
+  const [items, setItems] = useState<ManualItem[]>([createEmptyItem()]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // ✅ Resetar formulário
-  const resetForm = () => {
-    setInventoryName('');
-    setItems([
-      {
-        id: '1',
-        code: '',
-        description: '',
-        department: '',
-        location: '',
-        status: 'good',
-        value: '',
-      },
-    ]);
-  };
+  // ─── Navegação ──────────────────────────────────────────────────────────────
 
-  // ✅ Navegações
-  const handleGoBack = () => {
-    if (inventoryName.trim() || items.some((item) => item.code.trim())) {
-      Alert.alert('Cancelar cadastro', 'Deseja cancelar o cadastro? Os dados não serão salvos.', [
-        { text: 'Continuar cadastro', style: 'cancel' },
-        {
-          text: 'Cancelar',
-          style: 'destructive',
-          onPress: () => navigation.goBack(),
-        },
-      ]);
-    } else {
-      navigation.goBack();
-    }
-  };
+  const handleGoBack = () => navigation.goBack();
 
   const handleGoToHome = () => {
-    navigation.navigate('Home');
+    const hasData = inventoryName.trim() !== '' || items.some((item) => item.code.trim() !== '');
+    if (hasData) {
+      Alert.alert(
+        'Sair sem salvar?',
+        'Você tem dados não salvos. Se voltar para a Home, perderá o que digitou. Deseja sair?',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          {
+            text: 'Sair e Perder Dados',
+            style: 'destructive',
+            onPress: () => navigation.navigate('Home'),
+          },
+        ]
+      );
+    } else {
+      navigation.navigate('Home');
+    }
   };
 
-  // Adicionar novo item
-  const addItem = () => {
-    const newId = (items.length + 1).toString();
-    setItems([
-      ...items,
-      {
-        id: newId,
-        code: '',
-        description: '',
-        department: '',
-        location: '',
-        status: 'good',
-        value: '',
-      },
-    ]);
-  };
+  // ─── Gerenciamento do Schema ────────────────────────────────────────────────
 
-  // Remover item
-  const removeItem = (id: string) => {
-    if (items.length === 1) {
-      Alert.alert('Atenção', 'Você precisa ter pelo menos um item no inventário.');
+  const addSchemaField = () => {
+    const trimmed = newFieldName.trim();
+    if (!trimmed) return;
+
+    const isDuplicate = schemaFields.some((f) => f.name.toLowerCase() === trimmed.toLowerCase());
+    if (isDuplicate) {
+      Alert.alert('Erro', 'Já existe um campo com este nome.');
       return;
     }
-    setItems(items.filter((item) => item.id !== id));
+
+    setSchemaFields((prev) => [
+      ...prev,
+      { id: Date.now().toString() + Math.random().toString(36).slice(2), name: trimmed },
+    ]);
+    setNewFieldName('');
   };
 
-  // Atualizar item
-  const updateItem = (id: string, field: keyof ManualItem, value: string | AssetStatus) => {
-    setItems(items.map((item) => (item.id === id ? { ...item, [field]: value } : item)));
-  };
-
-  // Validar formulário
-  const validateForm = (): boolean => {
-    if (!inventoryName.trim()) {
-      Alert.alert('Erro', 'Digite um nome para o inventário');
-      return false;
-    }
-
-    const emptyItems = items.filter((item) => !item.code.trim());
-    if (emptyItems.length > 0) {
-      Alert.alert('Erro', `Existem ${emptyItems.length} item(s) sem código preenchido`);
-      return false;
-    }
-
-    const duplicateCodes = items.filter(
-      (item, index) => items.findIndex((i) => i.code === item.code) !== index
+  const removeSchemaField = (id: string, name: string) => {
+    Alert.alert(
+      'Remover campo',
+      `Tem certeza? Todos os dados preenchidos em "${name}" serão perdidos.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Remover',
+          style: 'destructive',
+          onPress: () => {
+            setSchemaFields((prev) => prev.filter((f) => f.id !== id));
+            setItems((prev) =>
+              prev.map((item) => {
+                const updatedCustomFields = { ...item.customFields };
+                delete updatedCustomFields[name];
+                return { ...item, customFields: updatedCustomFields };
+              })
+            );
+          },
+        },
+      ]
     );
-    if (duplicateCodes.length > 0) {
-      Alert.alert('Erro', 'Existem códigos duplicados. Cada item deve ter um código único.');
-      return false;
+  };
+
+  // ─── Gerenciamento de Itens ──────────────────────────────────────────────────
+
+  const addItem = () => setItems((prev) => [...prev, createEmptyItem()]);
+
+  const removeItem = (id: string) => {
+    if (items.length === 1) {
+      Alert.alert('Atenção', 'O inventário precisa ter ao menos um item.');
+      return;
+    }
+    setItems((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const updateItem = (
+    id: string,
+    field: keyof Omit<ManualItem, 'customFields' | 'id'>,
+    value: string
+  ) => {
+    setItems((prev) => prev.map((item) => (item.id === id ? { ...item, [field]: value } : item)));
+  };
+
+  const updateCustomField = (itemId: string, fieldName: string, value: string) => {
+    setItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== itemId) return item;
+        return {
+          ...item,
+          customFields: { ...item.customFields, [fieldName]: value },
+        };
+      })
+    );
+  };
+
+  // ─── Salvar ──────────────────────────────────────────────────────────────────
+
+  const handleSave = async () => {
+    if (!inventoryName.trim()) {
+      Alert.alert('Erro', 'Digite um nome para o inventário.');
+      return;
     }
 
-    return true;
-  };
+    const missingCode = items.find((item) => !item.code.trim());
+    if (missingCode) {
+      Alert.alert('Erro', 'Todos os itens precisam ter um código preenchido.');
+      return;
+    }
 
-  // Converter valor monetário
-  const parseValue = (valueStr: string): number | undefined => {
-    if (!valueStr.trim()) return undefined;
-    const cleaned = valueStr.replace(/\./g, '').replace(',', '.');
-    const num = parseFloat(cleaned);
-    return isNaN(num) ? undefined : num;
-  };
-
-  // Salvar inventário
-  const handleSave = async () => {
-    if (!validateForm()) return;
+    const codes = items.map((item) => item.code.trim().toUpperCase());
+    const uniqueCodes = new Set(codes);
+    if (uniqueCodes.size !== codes.length) {
+      Alert.alert(
+        'Erro',
+        'Existem itens com códigos de patrimônio duplicados. Cada código deve ser único.'
+      );
+      return;
+    }
 
     setIsLoading(true);
     try {
@@ -175,25 +217,28 @@ export const ManualInventoryScreen = () => {
         department: item.department.trim(),
         location: item.location.trim(),
         status: item.status,
-        value: parseValue(item.value),
+        value: parseBrazilianCurrencySafe(item.value),
+        customFields: Object.keys(item.customFields).length > 0 ? item.customFields : undefined,
         found: false,
       }));
 
       const id = StorageService.generateInventoryId();
-      const inventory = {
+      const schema = generateBasicSchema(assetItems); // gera schema a partir dos itens
+
+      const inventory: Inventory = {
         items: assetItems,
         metadata: {
           id,
           name: inventoryName.trim(),
           importDate: now,
           totalItems: assetItems.length,
-          status: 'active' as const,
+          status: 'active',
           lastModified: now,
         },
+        schema,
       };
 
       const result = await StorageService.saveInventory(inventory);
-
       if (result.ok) {
         Alert.alert(
           '✅ Sucesso!',
@@ -201,32 +246,21 @@ export const ManualInventoryScreen = () => {
           [
             {
               text: 'Ver Inventário',
-              onPress: () => {
-                resetForm();
+              onPress: () =>
                 navigation.replace('InventoryDetail', {
                   inventoryId: id,
                   inventoryName: inventoryName.trim(),
-                });
-              },
-            },
-            {
-              text: 'Criar outro',
-              onPress: () => {
-                resetForm();
-              },
+                }),
             },
             {
               text: 'Ir para Home',
               style: 'cancel',
-              onPress: () => {
-                resetForm();
-                navigation.navigate('Home');
-              },
+              onPress: () => navigation.navigate('Home'),
             },
           ]
         );
       } else {
-        throw new Error(result.error.message);
+        throw new Error(result.error?.message ?? 'Erro desconhecido');
       }
     } catch (error) {
       Alert.alert('Erro', error instanceof Error ? error.message : 'Falha ao criar inventário');
@@ -235,6 +269,8 @@ export const ManualInventoryScreen = () => {
     }
   };
 
+  // ─── Render ───────────────────────────────────────────────────────────────────
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -242,31 +278,66 @@ export const ManualInventoryScreen = () => {
     >
       <StatusBar barStyle="light-content" backgroundColor={colors.bg} />
 
-      {/* Header com botão de voltar */}
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={handleGoBack} style={styles.backBtn}>
-          <Text style={styles.backBtnText}>←</Text>
+          <Ionicons name="arrow-back" size={22} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Cadastro Manual</Text>
         <TouchableOpacity onPress={handleGoToHome} style={styles.homeBtn}>
-          <Text style={styles.homeBtnText}>🏠</Text>
+          <Ionicons name="home-outline" size={22} color={colors.accent} />
         </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Nome do inventário */}
+        {/* Nome do Inventário */}
         <View style={styles.section}>
           <Text style={styles.label}>Nome do Inventário *</Text>
           <TextInput
             style={styles.input}
             value={inventoryName}
             onChangeText={setInventoryName}
-            placeholder="Ex: Patrimônio 2024"
+            placeholder="Ex: Patrimônio 2026"
             placeholderTextColor={colors.textDim}
           />
         </View>
 
-        {/* Lista de itens */}
+        {/* ── Campos Extras ─────────────────────────────── */}
+        <View style={styles.section}>
+          <Text style={styles.label}>Adicionar Campos Extras (Opcional)</Text>
+          <Text style={localStyles.hint}>
+            Adicione campos específicos do seu contexto: Marca, Modelo, Cor…
+          </Text>
+
+          {schemaFields.map((field) => (
+            <View key={field.id} style={localStyles.schemaFieldRow}>
+              <Text style={localStyles.schemaFieldName}>{field.name}</Text>
+              <TouchableOpacity
+                onPress={() => removeSchemaField(field.id, field.name)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="close" size={18} color={colors.accentWarn} />
+              </TouchableOpacity>
+            </View>
+          ))}
+
+          <View style={localStyles.addFieldRow}>
+            <TextInput
+              style={[styles.input, localStyles.addFieldInput]}
+              value={newFieldName}
+              onChangeText={setNewFieldName}
+              placeholder="Nome do campo…"
+              placeholderTextColor={colors.textDim}
+              onSubmitEditing={addSchemaField}
+              returnKeyType="done"
+            />
+            <TouchableOpacity style={localStyles.addFieldBtn} onPress={addSchemaField}>
+              <Text style={localStyles.addFieldBtnText}>+ Adicionar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* ── Itens Patrimoniais ─────────────────────────────── */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.label}>Itens Patrimoniais *</Text>
@@ -280,102 +351,115 @@ export const ManualInventoryScreen = () => {
               <View style={styles.itemHeader}>
                 <Text style={styles.itemTitle}>Item {index + 1}</Text>
                 <TouchableOpacity onPress={() => removeItem(item.id)} style={styles.removeButton}>
-                  <Text style={styles.removeButtonText}>🗑 Remover</Text>
+                  <Ionicons name="trash-outline" size={18} color={colors.accentErr} />
+                  <Text style={styles.removeButtonText}> Remover</Text>
                 </TouchableOpacity>
               </View>
 
-              {/* Código */}
+              {/* Campos fixos */}
               <Text style={styles.fieldLabel}>Código *</Text>
               <TextInput
                 style={styles.input}
                 value={item.code}
-                onChangeText={(value) => updateItem(item.id, 'code', value)}
+                onChangeText={(v) => updateItem(item.id, 'code', v)}
                 placeholder="Ex: PAT-001"
                 placeholderTextColor={colors.textDim}
                 autoCapitalize="characters"
               />
 
-              {/* Descrição */}
               <Text style={styles.fieldLabel}>Descrição</Text>
               <TextInput
                 style={[styles.input, styles.textArea]}
                 value={item.description}
-                onChangeText={(value) => updateItem(item.id, 'description', value)}
+                onChangeText={(v) => updateItem(item.id, 'description', v)}
                 placeholder="Descrição do item"
                 placeholderTextColor={colors.textDim}
                 multiline
                 numberOfLines={2}
               />
 
-              {/* Linha: Departamento + Localização */}
               <View style={styles.row}>
                 <View style={styles.halfField}>
                   <Text style={styles.fieldLabel}>Departamento</Text>
                   <TextInput
                     style={styles.input}
                     value={item.department}
-                    onChangeText={(value) => updateItem(item.id, 'department', value)}
-                    placeholder="Ex: Administrativo"
+                    onChangeText={(v) => updateItem(item.id, 'department', v)}
+                    placeholder="Ex: TI, RH…"
                     placeholderTextColor={colors.textDim}
                   />
                 </View>
-
                 <View style={styles.halfField}>
                   <Text style={styles.fieldLabel}>Localização</Text>
                   <TextInput
                     style={styles.input}
                     value={item.location}
-                    onChangeText={(value) => updateItem(item.id, 'location', value)}
+                    onChangeText={(v) => updateItem(item.id, 'location', v)}
                     placeholder="Ex: Sala 101"
                     placeholderTextColor={colors.textDim}
                   />
                 </View>
               </View>
 
-              {/* Linha: Status + Valor */}
               <View style={styles.row}>
                 <View style={styles.halfField}>
                   <Text style={styles.fieldLabel}>Status</Text>
-                  <View style={styles.statusPicker}>
-                    {STATUS_OPTIONS.map((option) => (
+                  <View style={localStyles.statusRow}>
+                    {STATUS_OPTIONS.map((opt) => (
                       <TouchableOpacity
-                        key={option.value}
+                        key={opt.value}
                         style={[
-                          styles.statusOption,
-                          item.status === option.value && styles.statusOptionActive,
+                          localStyles.statusChip,
+                          item.status === opt.value && localStyles.statusChipActive,
                         ]}
-                        onPress={() => updateItem(item.id, 'status', option.value)}
+                        onPress={() => updateItem(item.id, 'status', opt.value)}
                       >
                         <Text
                           style={[
-                            styles.statusOptionText,
-                            item.status === option.value && styles.statusOptionTextActive,
+                            localStyles.statusChipText,
+                            item.status === opt.value && localStyles.statusChipTextActive,
                           ]}
                         >
-                          {option.label}
+                          {opt.label}
                         </Text>
                       </TouchableOpacity>
                     ))}
                   </View>
                 </View>
-
                 <View style={styles.halfField}>
                   <Text style={styles.fieldLabel}>Valor (R$)</Text>
                   <TextInput
                     style={styles.input}
                     value={item.value}
-                    onChangeText={(value) => updateItem(item.id, 'value', value)}
+                    onChangeText={(v) => updateItem(item.id, 'value', v)}
                     placeholder="Ex: 1.500,00"
                     placeholderTextColor={colors.textDim}
                     keyboardType="decimal-pad"
                   />
                 </View>
               </View>
+
+              {schemaFields.length > 0 && (
+                <View style={localStyles.customFieldsSection}>
+                  <Text style={localStyles.customFieldsSectionTitle}>Campos Extras</Text>
+                  {schemaFields.map((sf) => (
+                    <View key={sf.id}>
+                      <Text style={styles.fieldLabel}>{sf.name}</Text>
+                      <TextInput
+                        style={styles.input}
+                        value={item.customFields[sf.name] ?? ''}
+                        onChangeText={(v) => updateCustomField(item.id, sf.name, v)}
+                        placeholder={`Digite ${sf.name.toLowerCase()}…`}
+                        placeholderTextColor={colors.textDim}
+                      />
+                    </View>
+                  ))}
+                </View>
+              )}
             </View>
           ))}
         </View>
 
-        {/* Botão salvar */}
         <TouchableOpacity
           style={[styles.saveButton, isLoading && styles.buttonDisabled]}
           onPress={handleSave}
@@ -387,7 +471,10 @@ export const ManualInventoryScreen = () => {
             <Text style={styles.saveButtonText}>Salvar Inventário</Text>
           )}
         </TouchableOpacity>
+
+        <View style={{ height: 40 }} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
 };
+

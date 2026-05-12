@@ -13,7 +13,7 @@
 
 import { RouteProp, useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -24,6 +24,7 @@ import {
   View,
 } from 'react-native';
 import { SvgXml } from 'react-native-svg';
+import { Ionicons } from '@expo/vector-icons';
 import {
   AnalyticsService,
   GroupStat,
@@ -31,33 +32,31 @@ import {
   ScanEvent,
 } from '../services/AnalyticsService';
 import { ChartService } from '../services/ChartService';
-import { CSVExportService } from '../services/CSVExportService';
+import { CSVExportService } from '../services/CsvExportService';
 import { ReportService } from '../services/ReportService';
 import { StorageService } from '../services/StorageService';
 import { colors, reportDetailStyles } from '../styles/theme';
-import { Result, RootStackParamList } from '../types/types'; 
+import { RootStackParamList, InventorySchema } from '../types/types';
 
-// ─── Navegação ────────────────────────────────────────────────────────────────
-
+//  Navegação
 type DetailRoute = RouteProp<RootStackParamList, 'ReportDetail'>;
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
-// ─── Estilos ──────────────────────────────────────────────────────────────────
+//  Estilos
 const styles = reportDetailStyles;
 
-// ─── Componente principal ─────────────────────────────────────────────────────
-
+//  Componente principal
 export const ReportDetailScreen = () => {
   const navigation = useNavigation<NavProp>();
   const route = useRoute<DetailRoute>();
-  const { inventoryId, inventoryName: passedName } = route.params;
+  const { inventoryId } = route.params;
 
   const [report, setReport] = useState<InventoryReport | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
+ const schemaRef = useRef<InventorySchema | undefined>(undefined);
 
-  // ─── Carregamento ──────────────────────────────────────────────────────────
-
+  //  Carregamento
   const loadReport = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -71,6 +70,7 @@ export const ReportDetailScreen = () => {
       }
 
       const inv = result.value;
+      schemaRef.current = inv.schema;
       const computedReport = AnalyticsService.compute(inv);
       setReport(computedReport);
     } catch (error) {
@@ -88,7 +88,6 @@ export const ReportDetailScreen = () => {
   );
 
   // ─── SVGs dos gráficos (memoizados) ──────────────────────────────────────
-
   const pieSvg = useMemo(
     () =>
       report
@@ -126,7 +125,6 @@ export const ReportDetailScreen = () => {
   );
 
   // ─── Navegações ─────────────────────────────────────────────────────────────
-
   const handleGoBack = () => {
     navigation.goBack();
   };
@@ -149,7 +147,6 @@ export const ReportDetailScreen = () => {
   };
 
   // ─── Exportações ──────────────────────────────────────────────────────────
-
   const handleExportCSV = useCallback(() => {
     if (!report) return;
     Alert.alert('Exportar CSV', 'Selecione o tipo de relatório que deseja exportar:', [
@@ -158,12 +155,17 @@ export const ReportDetailScreen = () => {
         text: '📋 Encontrados',
         onPress: async () => {
           setIsExporting(true);
-          const result = await CSVExportService.exportFound(report);
-          setIsExporting(false);
-          if (!result.ok) {
-            Alert.alert('Erro', result.error.message);
-          } else {
-            Alert.alert('Sucesso', 'Arquivo exportado com sucesso!');
+          try {
+            const result = await CSVExportService.exportFound(report, schemaRef.current);
+            if (!result.ok) {
+              Alert.alert('Erro', result.error.message);
+            } else {
+              Alert.alert('Sucesso', 'Arquivo exportado com sucesso!');
+            }
+          } catch (error) {
+            Alert.alert('Erro', error instanceof Error ? error.message : 'Erro inesperado');
+          } finally {
+            setIsExporting(false);
           }
         },
       },
@@ -171,12 +173,17 @@ export const ReportDetailScreen = () => {
         text: '⚠️ Não encontrados',
         onPress: async () => {
           setIsExporting(true);
-          const result = await CSVExportService.exportPending(report);
-          setIsExporting(false);
-          if (!result.ok) {
-            Alert.alert('Erro', result.error.message);
-          } else {
-            Alert.alert('Sucesso', 'Arquivo exportado com sucesso!');
+          try {
+            const result = await CSVExportService.exportPending(report, schemaRef.current);
+            if (!result.ok) {
+              Alert.alert('Erro', result.error.message);
+            } else {
+              Alert.alert('Sucesso', 'Arquivo exportado com sucesso!');
+            }
+          } catch (error) {
+            Alert.alert('Erro', error instanceof Error ? error.message : 'Erro inesperado');
+          } finally {
+            setIsExporting(false);
           }
         },
       },
@@ -184,12 +191,17 @@ export const ReportDetailScreen = () => {
         text: '📊 Completo',
         onPress: async () => {
           setIsExporting(true);
-          const result = await CSVExportService.exportFull(report);
-          setIsExporting(false);
-          if (!result.ok) {
-            Alert.alert('Erro', result.error.message);
-          } else {
-            Alert.alert('Sucesso', 'Arquivo exportado com sucesso!');
+          try {
+            const result = await CSVExportService.exportFull(report, schemaRef.current);
+            if (!result.ok) {
+              Alert.alert('Erro', result.error.message);
+            } else {
+              Alert.alert('Sucesso', 'Arquivo exportado com sucesso!');
+            }
+          } catch (error) {
+            Alert.alert('Erro', error instanceof Error ? error.message : 'Erro inesperado');
+          } finally {
+            setIsExporting(false);
           }
         },
       },
@@ -218,7 +230,6 @@ export const ReportDetailScreen = () => {
   }, [report]);
 
   // ─── Loading ───────────────────────────────────────────────────────────────
-
   if (isLoading || !report) {
     return (
       <View style={styles.loadingContainer}>
@@ -231,17 +242,22 @@ export const ReportDetailScreen = () => {
 
   const { overall } = report;
   const isComplete = overall.progressPct === 100;
+  const hasTimeline = report.scanTimeline.length > 0;
 
   // ─── Render ───────────────────────────────────────────────────────────────
-
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={colors.bg} />
 
       {/* Header com navegação completa */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={handleGoBack} style={styles.backBtn}>
-          <Text style={styles.backBtnText}>←</Text>
+        <TouchableOpacity
+          onPress={handleGoBack}
+          style={styles.backBtn}
+          accessibilityLabel="Voltar"
+          accessibilityRole="button"
+        >
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
 
         <View style={styles.headerCenter}>
@@ -254,19 +270,31 @@ export const ReportDetailScreen = () => {
         </View>
 
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          {/* Botão para voltar ao inventário */}
-          <TouchableOpacity onPress={handleGoToInventoryDetail} style={styles.iconBtn}>
-            <Text style={styles.iconBtnText}>📋</Text>
+          <TouchableOpacity
+            onPress={handleGoToInventoryDetail}
+            style={styles.iconBtn}
+            accessibilityLabel="Ir para detalhes do inventário"
+            accessibilityRole="button"
+          >
+            <Ionicons name="list-outline" size={22} color={colors.accent} />
           </TouchableOpacity>
-          
-          {/* Botão para lista de relatórios */}
-          <TouchableOpacity onPress={handleGoToReports} style={styles.iconBtn}>
-            <Text style={styles.iconBtnText}>📊</Text>
+
+          <TouchableOpacity
+            onPress={handleGoToReports}
+            style={styles.iconBtn}
+            accessibilityLabel="Ir para relatórios"
+            accessibilityRole="button"
+          >
+            <Ionicons name="bar-chart-outline" size={22} color={colors.accent} />
           </TouchableOpacity>
-          
-          {/* Botão para Home */}
-          <TouchableOpacity onPress={handleGoToHome} style={styles.iconBtn}>
-            <Text style={styles.iconBtnText}>🏠</Text>
+
+          <TouchableOpacity
+            onPress={handleGoToHome}
+            style={styles.iconBtn}
+            accessibilityLabel="Ir para início"
+            accessibilityRole="button"
+          >
+            <Ionicons name="home-outline" size={22} color={colors.accent} />
           </TouchableOpacity>
         </View>
       </View>
@@ -300,7 +328,7 @@ export const ReportDetailScreen = () => {
           <View style={styles.overviewRow}>
             {/* Pizza */}
             <View style={styles.pieWrapper}>
-              <SvgXml xml={pieSvg} width={160} height={160} />
+              <SvgXml xml={pieSvg} width={180} height={180} />
             </View>
 
             {/* Stats à direita */}
@@ -340,7 +368,7 @@ export const ReportDetailScreen = () => {
                   value={AnalyticsService.formatDateTime(overall.completedAt)}
                 />
               )}
-              {overall.durationMinutes !== null && overall.durationMinutes !== undefined && (
+              {overall.durationMinutes != null && overall.durationMinutes > 0 && (
                 <MetaItem label="Duração" value={`${overall.durationMinutes} min`} />
               )}
             </View>
@@ -348,12 +376,12 @@ export const ReportDetailScreen = () => {
         </Section>
 
         {/* ── Linha do tempo ── */}
-        {report.scanTimeline.length > 0 && timelineSvg && (
+        {hasTimeline && timelineSvg && (
           <Section title={`Linha do tempo (${report.scanTimeline.length} scans)`}>
             <View style={styles.chartDark}>
               <SvgXml xml={timelineSvg} width="100%" height={110} />
             </View>
-            {overall.durationMinutes !== null && report.scanTimeline.length > 1 && (
+            {overall.durationMinutes != null && overall.durationMinutes > 0 && report.scanTimeline.length > 1 && (
               <Text style={styles.chartCaption}>
                 Média: {((overall.durationMinutes * 60) / report.scanTimeline.length).toFixed(0)}s
                 por item
@@ -386,11 +414,15 @@ export const ReportDetailScreen = () => {
         <Section title={`Itens não encontrados (${report.notFoundItems.length})`}>
           {report.notFoundItems.length === 0 ? (
             <View style={styles.allFoundBanner}>
-              <Text style={styles.allFoundText}>🎉 Todos os itens foram localizados!</Text>
+              <Ionicons name="checkmark-circle" size={20} color={colors.success} style={{ marginRight: 6 }} />
+              <Text style={styles.allFoundText}>Todos os itens foram localizados!</Text>
             </View>
           ) : (
             report.notFoundItems.map((item, i) => (
-              <View key={`nf-${item.code}-${i}`} style={[styles.itemRow, styles.itemRowPending]}>
+              <View
+                key={`nf-${item.code}-${item.location ?? ''}-${i}`}
+                style={[styles.itemRow, styles.itemRowPending]}
+              >
                 <View style={[styles.itemInd, styles.itemIndPending]} />
                 <View style={styles.itemBody}>
                   <Text style={styles.itemCode}>{item.code}</Text>
@@ -399,10 +431,14 @@ export const ReportDetailScreen = () => {
                   ) : null}
                   <View style={styles.itemMeta}>
                     {item.location ? (
-                      <Text style={styles.itemMetaTxt}>📍 {item.location}</Text>
+                      <Text style={styles.itemMetaTxt}>
+                        <Ionicons name="location-outline" size={12} /> {item.location}
+                      </Text>
                     ) : null}
                     {item.department ? (
-                      <Text style={styles.itemMetaTxt}>🏢 {item.department}</Text>
+                      <Text style={styles.itemMetaTxt}>
+                        <Ionicons name="business-outline" size={12} /> {item.department}
+                      </Text>
                     ) : null}
                   </View>
                 </View>
@@ -412,7 +448,7 @@ export const ReportDetailScreen = () => {
         </Section>
 
         {/* ── Histórico de scans ── */}
-        {report.scanTimeline.length > 0 && (
+        {hasTimeline && (
           <Section title="Histórico de scans">
             {report.scanTimeline.map((event, i) => (
               <ScanEventRow key={`ev-${event.code}-${i}`} event={event} index={i} />
@@ -426,7 +462,7 @@ export const ReportDetailScreen = () => {
 
 // ─── Sub-componentes ──────────────────────────────────────────────────────────
 
-const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
+const Section = React.memo(({ title, children }: { title: string; children: React.ReactNode }) => (
   <View style={styles.section}>
     <View style={styles.sectionHeader}>
       <View style={styles.sectionAccent} />
@@ -434,9 +470,9 @@ const Section = ({ title, children }: { title: string; children: React.ReactNode
     </View>
     {children}
   </View>
-);
+));
 
-const StatCard = ({
+const StatCard = React.memo(({
   label,
   value,
   accent,
@@ -459,16 +495,16 @@ const StatCard = ({
       {value}
     </Text>
   </View>
-);
+));
 
-const MetaItem = ({ label, value }: { label: string; value: string }) => (
+const MetaItem = React.memo(({ label, value }: { label: string; value: string }) => (
   <View style={styles.metaItem}>
     <Text style={styles.metaLabel}>{label}</Text>
     <Text style={styles.metaValue}>{value}</Text>
   </View>
-);
+));
 
-const GroupTable = ({ groups }: { groups: GroupStat[] }) => (
+const GroupTable = React.memo(({ groups }: { groups: GroupStat[] }) => (
   <View style={styles.groupTable}>
     <View style={styles.groupTableHeader}>
       {['Grupo', 'Total', 'Enc.', '%'].map((h) => (
@@ -495,9 +531,9 @@ const GroupTable = ({ groups }: { groups: GroupStat[] }) => (
       </View>
     ))}
   </View>
-);
+));
 
-const ScanEventRow = ({ event, index }: { event: ScanEvent; index: number }) => (
+const ScanEventRow = React.memo(({ event, index }: { event: ScanEvent; index: number }) => (
   <View style={styles.scanRow}>
     <Text style={styles.scanIndex}>{index + 1}</Text>
     <View style={styles.scanBody}>
@@ -513,7 +549,11 @@ const ScanEventRow = ({ event, index }: { event: ScanEvent; index: number }) => 
           {event.description}
         </Text>
       ) : null}
-      {event.location ? <Text style={styles.scanMeta}>📍 {event.location}</Text> : null}
+      {event.location ? (
+        <Text style={styles.scanMeta}>
+          <Ionicons name="location-outline" size={11} /> {event.location}
+        </Text>
+      ) : null}
     </View>
   </View>
-);
+));

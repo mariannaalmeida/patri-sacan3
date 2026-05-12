@@ -14,6 +14,8 @@ import {
 import { StorageService } from '../services/StorageService';
 import { colors, commonStyles, inventoryListStyles } from '../styles/theme';
 import { InventoryStats, RootStackParamList } from '../types/types';
+import { Ionicons } from '@expo/vector-icons';
+import { formatDisplayDate } from '../utils/dateUtils';
 
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -140,7 +142,7 @@ export const InventoryListScreen = () => {
     navigation.navigate('Settings');
   };
 
-  // ✅ Renderização do item usando ID
+  //  Renderização do item usando ID
   const renderItem = useCallback(
     ({ item }: { item: InventoryRow }) => (
       <InventoryCard
@@ -178,7 +180,7 @@ export const InventoryListScreen = () => {
       {/* Header com botão de voltar e ações */}
       <View style={inventoryListStyles.header}>
         <TouchableOpacity onPress={handleGoBack} style={inventoryListStyles.backBtn}>
-          <Text style={inventoryListStyles.backBtnText}>←</Text>
+          <Ionicons name="arrow-back" size={22} color={colors.text} />
         </TouchableOpacity>
 
         <View style={inventoryListStyles.headerCenter}>
@@ -192,10 +194,10 @@ export const InventoryListScreen = () => {
 
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <TouchableOpacity onPress={handleGoToReports} style={inventoryListStyles.iconBtn}>
-            <Text style={inventoryListStyles.iconBtnText}>📊</Text>
+            <Ionicons name="bar-chart-outline" size={18} color={colors.accent} />
           </TouchableOpacity>
           <TouchableOpacity onPress={handleGoToSettings} style={inventoryListStyles.iconBtn}>
-            <Text style={inventoryListStyles.iconBtnText}>⚙️</Text>
+            <Ionicons name="settings-outline" size={18} color={colors.accent} />
           </TouchableOpacity>
         </View>
       </View>
@@ -228,7 +230,7 @@ export const InventoryListScreen = () => {
         onPress={handleGoToImportCSV}
         activeOpacity={0.85}
       >
-        <Text style={inventoryListStyles.fabIcon}>+</Text>
+        <Ionicons name="add" size={22} color="#000" />
         <Text style={inventoryListStyles.fabLabel}>Novo inventário</Text>
       </TouchableOpacity>
     </View>
@@ -243,16 +245,15 @@ interface InventoryCardProps {
   onDelete: () => void;
 }
 
-const InventoryCard = ({ item, onPress, onDelete }: InventoryCardProps) => {
-  const pct = item.stats ? Math.round(item.stats.progress) : 0;
+const InventoryCard = React.memo(({ item, onPress, onDelete }: InventoryCardProps) => {
+  const pct =
+    item.stats && item.stats.totalItems > 0
+      ? Math.round((item.stats.scannedItems / item.stats.totalItems) * 100)
+      : 0;
   const isComplete = pct === 100;
 
   const formattedDate = item.stats?.lastModified
-    ? new Date(item.stats.lastModified).toLocaleDateString('pt-BR', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-      })
+    ? formatDisplayDate(item.stats.lastModified)
     : null;
 
   return (
@@ -270,7 +271,8 @@ const InventoryCard = ({ item, onPress, onDelete }: InventoryCardProps) => {
         <View style={inventoryListStyles.cardHeaderRight}>
           {isComplete && (
             <View style={inventoryListStyles.completeBadge}>
-              <Text style={inventoryListStyles.completeBadgeText}>✓ Completo</Text>
+              <Ionicons name="checkmark-circle" size={14} color={colors.success} />
+              <Text style={inventoryListStyles.completeBadgeText}> Completo</Text>
             </View>
           )}
           <TouchableOpacity
@@ -278,7 +280,7 @@ const InventoryCard = ({ item, onPress, onDelete }: InventoryCardProps) => {
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             style={inventoryListStyles.deleteBtn}
           >
-            <Text style={inventoryListStyles.deleteBtnText}>🗑</Text>
+            <Ionicons name="trash-outline" size={18} color={colors.accentErr} />
           </TouchableOpacity>
         </View>
       </View>
@@ -320,7 +322,7 @@ const InventoryCard = ({ item, onPress, onDelete }: InventoryCardProps) => {
       )}
     </TouchableOpacity>
   );
-};
+});
 
 // ─── Sub-componente: estado vazio com ações ───────────────────────────────────
 
@@ -331,7 +333,7 @@ interface EmptyStateProps {
 
 const EmptyState = ({ onImport, onManual }: EmptyStateProps) => (
   <View style={inventoryListStyles.emptyContainer}>
-    <Text style={inventoryListStyles.emptyIcon}>📋</Text>
+    <Ionicons name="document-text-outline" size={48} color={colors.textDim} />
     <Text style={inventoryListStyles.emptyTitle}>Nenhum inventário encontrado</Text>
     <Text style={inventoryListStyles.emptyDesc}>
       Importe um arquivo CSV ou cadastre manualmente para começar.
@@ -339,10 +341,12 @@ const EmptyState = ({ onImport, onManual }: EmptyStateProps) => (
 
     <View style={{ flexDirection: 'row', gap: 12, marginTop: 24 }}>
       <TouchableOpacity style={inventoryListStyles.emptyBtn} onPress={onImport}>
-        <Text style={inventoryListStyles.emptyBtnText}>📄 Importar CSV</Text>
+        <Ionicons name="document-attach-outline" size={18} color={colors.accent} />
+        <Text style={inventoryListStyles.emptyBtnText}> Importar CSV</Text>
       </TouchableOpacity>
       <TouchableOpacity style={inventoryListStyles.emptyBtn} onPress={onManual}>
-        <Text style={inventoryListStyles.emptyBtnText}>✏️ Cadastrar</Text>
+        <Ionicons name="create-outline" size={18} color={colors.accent} />
+        <Text style={inventoryListStyles.emptyBtnText}> Cadastrar</Text>
       </TouchableOpacity>
     </View>
   </View>

@@ -12,15 +12,22 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { ScannerService } from '../services/ScannerService';
 import { StorageService } from '../services/StorageService';
 import { colors, commonStyles, inventoryDetailStyles } from '../styles/theme';
 import { AssetItem, Inventory, RootStackParamList } from '../types/types';
+import { formatDisplayDate, formatDisplayTime } from '../utils/dateUtils';
 
 type DetailRouteProp = RouteProp<RootStackParamList, 'InventoryDetail'>;
 type NavProp = NativeStackNavigationProp<RootStackParamList>;
 
 type FilterTab = 'all' | 'pending' | 'scanned';
+
+// Type guard (poderia ser importado, mas coloco aqui para completude)
+const isScannedItem = (item: AssetItem): item is AssetItem & { found: true } => {
+  return item.found === true;
+};
 
 export const InventoryDetailScreen = () => {
   const navigation = useNavigation<NavProp>();
@@ -33,16 +40,13 @@ export const InventoryDetailScreen = () => {
   const [filter, setFilter] = useState<FilterTab>('all');
   const [search, setSearch] = useState('');
 
-  // ─── Carregamento ────────────────────────────────────────────────────────
-
+  // ─── Carregamento ────────────────────────────────────────────
   const loadInventory = useCallback(
     async (silent = false) => {
       if (!silent) setIsLoading(true);
       try {
         const result = await StorageService.loadInventory(inventoryId);
-        if (!result.ok) {
-          throw new Error(result.error.message);
-        }
+        if (!result.ok) throw new Error(result.error.message);
         setInventory(result.value);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Erro desconhecido';
@@ -63,43 +67,39 @@ export const InventoryDetailScreen = () => {
     }, [loadInventory])
   );
 
-  // ─── Dados derivados ─────────────────────────────────────────────────────
-
+  // ─── Progresso ───────────────────────────────────────────────
   const progress = useMemo(
     () => (inventory ? ScannerService.getProgress(inventory) : null),
     [inventory]
   );
 
-  // ─── Filtro e busca ─────────────────────────────────────────────────────
-
+  // ─── Itens filtrados e pesquisados ───────────────────────────
   const filteredItems = useMemo(() => {
     if (!inventory) return [];
+    // Não precisamos acrescentar isScanned artificialmente; usamos o type guard no render.
+    let result = inventory.items;
 
-    const allItems = inventory.items.map((item) => ({
-      ...item,
-      isScanned: item.found === true,
-    }));
-
-    let result = allItems;
-    if (filter === 'pending') result = allItems.filter((i) => !i.isScanned);
-    if (filter === 'scanned') result = allItems.filter((i) => i.isScanned);
+    if (filter === 'pending') result = result.filter((i) => !i.found);
+    if (filter === 'scanned') result = result.filter((i) => i.found);
 
     if (search.trim()) {
       const q = search.toLowerCase().trim();
-      result = result.filter(
-        (i) =>
+      result = result.filter((i) => {
+        const inCustom = i.customFields
+          ? Object.values(i.customFields).some((val) => val.toLowerCase().includes(q))
+          : false;
+        return (
           i.code.toLowerCase().includes(q) ||
           (i.description && i.description.toLowerCase().includes(q)) ||
-          (i.location && i.location.toLowerCase().includes(q))
-      );
+          (i.location && i.location.toLowerCase().includes(q)) ||
+          inCustom
+        );
+      });
     }
-
     return result;
   }, [inventory, filter, search]);
 
-  // ─── Ações ───────────────────────────────────────────────────────────────
-
-  // ✅ Navegação para Relatório
+  // ─── Ações de navegação e reset ──────────────────────────────
   const handleViewReport = useCallback(() => {
     if (!inventory) return;
     navigation.navigate('ReportDetail', {
@@ -108,7 +108,6 @@ export const InventoryDetailScreen = () => {
     });
   }, [inventory, navigation]);
 
-  // ✅ Navegação para Scanner
   const handleStartScan = useCallback(() => {
     if (!inventory) return;
     if (progress?.remaining === 0) {
@@ -128,7 +127,6 @@ export const InventoryDetailScreen = () => {
     navigation.navigate('Scanner', { inventoryId: inventory.metadata.id });
   }, [inventory, progress, navigation]);
 
-  // ✅ Resetar inventário
   const handleResetInventory = useCallback(() => {
     if (!inventory) return;
     Alert.alert(
@@ -166,13 +164,32 @@ export const InventoryDetailScreen = () => {
     );
   }, [inventory, loadInventory]);
 
-  // ✅ Voltar para Home
-  const handleGoBack = () => {
-    navigation.goBack();
-  };
+  const handleDeleteInventory = useCallback(() => {
+    if (!inventory) return;
+    Alert.alert(
+      'Excluir Inventário',
+      `Tem certeza que deseja excluir "${inventory.metadata.name}"? Esta ação apagará todos os dados permanentemente.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Excluir',
+          style: 'destructive',
+          onPress: async () => {
+            const result = await StorageService.deleteInventory(inventory.metadata.id);
+            if (result.ok) {
+              navigation.navigate('Home');
+            } else {
+              Alert.alert('Erro', result.error.message);
+            }
+          },
+        },
+      ]
+    );
+  }, [inventory, navigation]);
 
-  // ─── Loading ──────────────────────────────────────────────────────────────
+  const handleGoBack = () => navigation.goBack();
 
+  // ─── Loading e fallback ──────────────────────────────────────
   if (isLoading) {
     return (
       <View style={inventoryDetailStyles.loadingContainer}>
@@ -184,58 +201,63 @@ export const InventoryDetailScreen = () => {
   }
 
   if (!inventory) return null;
-
   const isComplete = progress?.percentage === 100;
 
-  // ─── Render ───────────────────────────────────────────────────────────────
-
+  // ─── Render principal ────────────────────────────────────────
   return (
     <View style={commonStyles.container}>
       <StatusBar barStyle="light-content" backgroundColor={colors.bg} />
 
-      {/* Header com botão de voltar e relatório */}
+      {/* Header */}
       <View style={inventoryDetailStyles.header}>
-        <TouchableOpacity
-          onPress={handleGoBack}
-          style={inventoryDetailStyles.backBtn}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Text style={inventoryDetailStyles.backBtnText}>←</Text>
+        <TouchableOpacity onPress={handleGoBack} style={inventoryDetailStyles.backBtn}>
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
 
         <View style={inventoryDetailStyles.headerCenter}>
-          <Text style={inventoryDetailStyles.headerTitle} numberOfLines={1}>
+          <Text
+            style={inventoryDetailStyles.headerTitle}
+            numberOfLines={1}
+            accessibilityLabel={`Nome do inventário: ${inventory.metadata.name}`}
+          >
             {inventory.metadata.name}
           </Text>
           <Text style={inventoryDetailStyles.headerSub}>
-            Importado em{' '}
-            {new Date(inventory.metadata.importDate).toLocaleDateString('pt-BR', {
-              day: '2-digit',
-              month: 'short',
-              year: 'numeric',
-            })}
+            Importado em {formatDisplayDate(inventory.metadata.importDate)}
           </Text>
         </View>
 
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          {/* ✅ Botão de Relatório */}
+          {/* Botão de Relatório */}
           <TouchableOpacity onPress={handleViewReport} style={inventoryDetailStyles.reportBtn}>
-            <Text style={inventoryDetailStyles.reportBtnText}>📊</Text>
+            <Ionicons name="bar-chart-outline" size={20} color={colors.accent} />
           </TouchableOpacity>
-          {/* ✅ Botão de Reset */}
+
+          {/* Botão de Reset */}
           <TouchableOpacity onPress={handleResetInventory} style={inventoryDetailStyles.resetBtn}>
-            <Text style={inventoryDetailStyles.resetBtnText}>↺</Text>
+            <Ionicons name="refresh-outline" size={20} color={colors.accentWarn} />
+          </TouchableOpacity>
+
+          {/* Botão de Lixeira */}
+          <TouchableOpacity
+            onPress={handleDeleteInventory}
+            style={[
+              inventoryDetailStyles.resetBtn,
+              { borderColor: colors.accentWarn, backgroundColor: colors.accentWarn + '20' },
+            ]}
+          >
+            <Ionicons name="trash-outline" size={20} color={colors.accentWarn} />
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* Cards de progresso */}
+      {/* Progresso */}
       {progress && (
         <View style={inventoryDetailStyles.statsSection}>
           <View style={inventoryDetailStyles.statsCards}>
             <StatCard label="Total" value={progress.total} />
-            <StatCard label="Escaneados" value={progress.scanned} accent />
-            <StatCard label="Pendentes" value={progress.remaining} warn={progress.remaining > 0} />
+            <StatCard label="Escaneados" value={progress.scanned} variant="accent" />
+            <StatCard label="Pendentes" value={progress.remaining} variant="warn" />
           </View>
 
           <View style={inventoryDetailStyles.progressRow}>
@@ -260,8 +282,9 @@ export const InventoryDetailScreen = () => {
 
           {isComplete && (
             <View style={inventoryDetailStyles.completeBanner}>
+              <Ionicons name="checkmark-done-outline" size={24} color={colors.success} />
               <Text style={inventoryDetailStyles.completeBannerText}>
-                🎉 Inventário completo! Todos os itens foram encontrados.
+                Inventário completo! Todos os itens foram encontrados.
               </Text>
             </View>
           )}
@@ -271,7 +294,7 @@ export const InventoryDetailScreen = () => {
       {/* Busca */}
       <View style={inventoryDetailStyles.searchSection}>
         <View style={inventoryDetailStyles.searchBar}>
-          <Text style={inventoryDetailStyles.searchIcon}>🔍</Text>
+          <Ionicons name="search-outline" size={20} color={colors.textDim} />
           <TextInput
             style={inventoryDetailStyles.searchInput}
             value={search}
@@ -316,7 +339,7 @@ export const InventoryDetailScreen = () => {
       <FlatList
         data={filteredItems}
         keyExtractor={(item, index) => `${item.code}-${index}`}
-        renderItem={({ item }) => <ItemRow item={item} isScanned={item.isScanned} />}
+        renderItem={({ item }) => <ItemRow item={item} />}
         contentContainerStyle={[
           inventoryDetailStyles.listContent,
           filteredItems.length === 0 && inventoryDetailStyles.listContentEmpty,
@@ -334,9 +357,17 @@ export const InventoryDetailScreen = () => {
         }
         ListEmptyComponent={
           <View style={inventoryDetailStyles.emptyContainer}>
-            <Text style={inventoryDetailStyles.emptyIcon}>
-              {search ? '🔍' : filter === 'pending' ? '✅' : '📦'}
-            </Text>
+            <Ionicons
+              name={
+                search
+                  ? 'search-outline'
+                  : filter === 'pending'
+                    ? 'checkmark-circle-outline'
+                    : 'cube-outline'
+              }
+              size={48}
+              color={filter === 'pending' && !search ? colors.success : colors.textDim}
+            />
             <Text style={inventoryDetailStyles.emptyText}>
               {search
                 ? 'Nenhum item encontrado para esta busca.'
@@ -349,14 +380,23 @@ export const InventoryDetailScreen = () => {
         showsVerticalScrollIndicator={false}
       />
 
-      {/* Botão de scanner */}
+      {/* FAB Scanner */}
       <TouchableOpacity
         style={[inventoryDetailStyles.scanFab, isComplete && inventoryDetailStyles.scanFabComplete]}
         onPress={handleStartScan}
         activeOpacity={0.85}
       >
-        <Text style={inventoryDetailStyles.scanFabIcon}>{isComplete ? '✓' : '▶'}</Text>
-        <Text style={inventoryDetailStyles.scanFabLabel}>
+        <Ionicons
+          name={isComplete ? 'checkmark-circle' : 'play'}
+          size={24}
+          color={isComplete ? colors.accent : '#000'}
+        />
+        <Text
+          style={[
+            inventoryDetailStyles.scanFabLabel,
+            isComplete && inventoryDetailStyles.scanFabLabelComplete,
+          ]}
+        >
           {isComplete ? 'Inventário completo' : 'Iniciar scanner'}
         </Text>
       </TouchableOpacity>
@@ -366,64 +406,57 @@ export const InventoryDetailScreen = () => {
 
 // ─── Sub-componentes ─────────────────────────────────────────────────────────
 
-const StatCard = ({
-  label,
-  value,
-  accent,
-  warn,
-}: {
+interface StatCardProps {
   label: string;
   value: number;
-  accent?: boolean;
-  warn?: boolean;
-}) => (
-  <View style={inventoryDetailStyles.statCard}>
-    <Text style={inventoryDetailStyles.statCardLabel}>{label}</Text>
-    <Text
-      style={[
-        inventoryDetailStyles.statCardValue,
-        accent && inventoryDetailStyles.statCardValueAccent,
-        warn && value > 0 && inventoryDetailStyles.statCardValueWarn,
-      ]}
-    >
-      {value}
-    </Text>
-  </View>
-);
+  variant?: 'default' | 'accent' | 'warn';
+}
 
-const ItemRow = ({
-  item,
-  isScanned,
-}: {
-  item: AssetItem & { isScanned: boolean };
-  isScanned: boolean;
-}) => {
-  const formattedTime =
-    isScanned && 'scanDate' in item && item.scanDate
-      ? new Date(item.scanDate).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-      : null;
+const StatCard = React.memo(({ label, value, variant = 'default' }: StatCardProps) => {
+  const valueStyle = [
+    inventoryDetailStyles.statCardValue,
+    variant === 'accent' && inventoryDetailStyles.statCardValueAccent,
+    variant === 'warn' && value > 0 && inventoryDetailStyles.statCardValueWarn,
+  ];
 
   return (
-    <View
-      style={[inventoryDetailStyles.itemRow, isScanned && inventoryDetailStyles.itemRowScanned]}
-    >
+    <View style={inventoryDetailStyles.statCard}>
+      <Text style={inventoryDetailStyles.statCardLabel}>{label}</Text>
+      <Text style={valueStyle}>{value}</Text>
+    </View>
+  );
+});
+
+interface ItemRowProps {
+  item: AssetItem;
+}
+
+const ItemRow = React.memo(({ item }: ItemRowProps) => {
+  const scanned = isScannedItem(item);
+  const scanTime = scanned ? formatDisplayTime(item.scanDate) : null;
+  const customFieldsEntries = item.customFields ? Object.entries(item.customFields) : [];
+
+  return (
+    <View style={[inventoryDetailStyles.itemRow, scanned && inventoryDetailStyles.itemRowScanned]}>
       <View
         style={[
           inventoryDetailStyles.itemIndicator,
-          isScanned && inventoryDetailStyles.itemIndicatorScanned,
+          scanned && inventoryDetailStyles.itemIndicatorScanned,
         ]}
       />
 
       <View style={inventoryDetailStyles.itemContent}>
         <View style={inventoryDetailStyles.itemHeader}>
           <Text style={inventoryDetailStyles.itemCode}>{item.code}</Text>
-          {isScanned ? (
+          {scanned ? (
             <View style={inventoryDetailStyles.scannedBadge}>
-              <Text style={inventoryDetailStyles.scannedBadgeText}>✓ Escaneado</Text>
+              <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+              <Text style={inventoryDetailStyles.scannedBadgeText}> Escaneado</Text>
             </View>
           ) : (
             <View style={inventoryDetailStyles.pendingBadge}>
-              <Text style={inventoryDetailStyles.pendingBadgeText}>Pendente</Text>
+              <Ionicons name="ellipse-outline" size={16} color={colors.textDim} />
+              <Text style={inventoryDetailStyles.pendingBadgeText}> Pendente</Text>
             </View>
           )}
         </View>
@@ -434,18 +467,56 @@ const ItemRow = ({
           </Text>
         ) : null}
 
-        <View style={inventoryDetailStyles.itemMeta}>
-          {item.location ? (
-            <Text style={inventoryDetailStyles.itemMetaText}>📍 {item.location}</Text>
-          ) : null}
-          {item.department ? (
-            <Text style={inventoryDetailStyles.itemMetaText}>🏢 {item.department}</Text>
-          ) : null}
-          {formattedTime ? (
-            <Text style={inventoryDetailStyles.itemMetaText}>🕐 {formattedTime}</Text>
-          ) : null}
-        </View>
+        <ItemMeta location={item.location} department={item.department} scanTime={scanTime} />
+
+        {customFieldsEntries.length > 0 && <CustomFields fields={item.customFields!} />}
       </View>
     </View>
   );
-};
+});
+
+// ─── Sub-componentes menores ─────────────────────────────────────────────────
+
+interface ItemMetaProps {
+  location?: string;
+  department?: string;
+  scanTime: string | null;
+}
+
+const ItemMeta = React.memo(({ location, department, scanTime }: ItemMetaProps) => (
+  <View style={inventoryDetailStyles.itemMeta}>
+    {location && (
+      <View style={inventoryDetailStyles.metaItem}>
+        <Ionicons name="location-outline" size={14} color={colors.textDim} />
+        <Text style={inventoryDetailStyles.itemMetaText}> {location}</Text>
+      </View>
+    )}
+    {department && (
+      <View style={inventoryDetailStyles.metaItem}>
+        <Ionicons name="business-outline" size={14} color={colors.textDim} />
+        <Text style={inventoryDetailStyles.itemMetaText}> {department}</Text>
+      </View>
+    )}
+    {scanTime && (
+      <View style={inventoryDetailStyles.metaItem}>
+        <Ionicons name="time-outline" size={14} color={colors.textDim} />
+        <Text style={inventoryDetailStyles.itemMetaText}> {scanTime}</Text>
+      </View>
+    )}
+  </View>
+));
+
+interface CustomFieldsProps {
+  fields: Record<string, string>;
+}
+
+const CustomFields = React.memo(({ fields }: CustomFieldsProps) => (
+  <View style={inventoryDetailStyles.customFieldsContainer}>
+    {Object.entries(fields).map(([key, value]) => (
+      <View key={key} style={inventoryDetailStyles.customFieldRow}>
+        <Text style={inventoryDetailStyles.customFieldKey}>{key}:</Text>
+        <Text style={inventoryDetailStyles.customFieldValue}>{value}</Text>
+      </View>
+    ))}
+  </View>
+));
