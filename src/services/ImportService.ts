@@ -10,11 +10,13 @@ import {
   Inventory,
   MappableField,
   Result,
+  isStandardField,
 } from '../types/types';
 import { toISODate } from '../utils/dateUtils';
 import { handleServiceError } from '../utils/errorUtils';
 import { StorageService } from './StorageService';
 import { generateBasicSchema } from '../utils/schemaUtils';
+import { parseBrazilianCurrencySafe } from '../utils/currencyUtils';
 
 export class ImportService {
   /**
@@ -173,19 +175,23 @@ export class ImportService {
         seenCodes.add(codeVal);
       }
 
+      // Descrição agora é opcional: apenas avisa, não invalida a linha
       if (colDesc) {
         const descVal = row[colDesc]?.toString().trim();
         if (!descVal) {
-          rowErrors.push(`Descrição obrigatória (coluna: ${colDesc})`);
-          isRowValid = false;
+          result.warnings.push({
+            row: rowNum,
+            field: colDesc,
+            message: 'Descrição não informada',
+          });
+          // isRowValid não é alterado
         }
       }
 
       if (colValue && row[colValue]) {
         const rawValue = row[colValue].toString().trim();
-        const numericStr = rawValue.replace(/\./g, '').replace(',', '.');
-        const numeric = parseFloat(numericStr);
-        if (isNaN(numeric)) {
+        const numeric = parseBrazilianCurrencySafe(rawValue);
+        if (numeric === undefined) {
           result.warnings.push({
             row: rowNum,
             field: colValue,
@@ -244,7 +250,6 @@ export class ImportService {
     data: Record<string, string>[],
     mapping: Record<string, MappableField>
   ): AssetItem[] {
-    const timestamp = Date.now();
     return data.map((row, index) => {
       const base: AssetItemBase = {
         code: '',
@@ -261,26 +266,26 @@ export class ImportService {
         const rawValue = row[csvCol];
         if (rawValue !== undefined && rawValue !== null && rawValue !== '') {
           const strValue = rawValue.toString().trim();
-          switch (assetField) {
-            case 'code':
-            case 'description':
-            case 'department':
-            case 'location':
-              base[assetField] = strValue;
-              break;
-            case 'value':
-              const numericStr = strValue.replace(/\./g, '').replace(',', '.');
-              const num = parseFloat(numericStr);
-              if (!isNaN(num)) base.value = num;
-              break;
-            case 'status':
-              base.status = this.normalizeStatus(strValue);
-              break;
-            default:
-              //  Tudo que não for nativo, cai aqui nos campos customizados!
-              if (base.customFields) {
-                base.customFields[assetField] = strValue;
+          if (isStandardField(assetField)) {
+            switch (assetField) {
+              case 'value': {
+                const parsed = parseBrazilianCurrencySafe(strValue);
+                if (parsed !== undefined) base.value = parsed;
+                break;
               }
+              case 'status':
+                base.status = this.normalizeStatus(strValue);
+                break;
+              default:
+                // code, description, department, location
+                base[assetField] = strValue;
+                break;
+            }
+          } else {
+            // Campo customizado
+            if (base.customFields) {
+              base.customFields[assetField] = strValue;
+            }
           }
         }
       }
@@ -289,7 +294,6 @@ export class ImportService {
     });
   }
 
- 
   /**
    *  Criar inventário a partir dos itens convertidos e salvar no Storage
    */

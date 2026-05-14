@@ -1,6 +1,6 @@
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -13,7 +13,13 @@ import {
 } from 'react-native';
 import { ImportService } from '../services/ImportService';
 import { colors, createInventoryStyles } from '../styles/theme';
-import { ColumnMapping, MappableField, RootStackParamList } from '../types/types';
+import {
+  ColumnMapping,
+  MappableField,
+  RootStackParamList,
+  CSVValidationResult,
+} from '../types/types';
+import { Ionicons } from '@expo/vector-icons';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -43,12 +49,18 @@ export const ImportInventoryScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const [currentStep, setCurrentStep] = useState<Step>('initial');
   const [inventoryName, setInventoryName] = useState('');
-  const [csvData, setCsvData] = useState<any[]>([]);
+  const [csvData, setCsvData] = useState<Record<string, string>[]>([]);
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [columnMapping, setColumnMapping] = useState<ColumnMapping[]>([]);
   const [finalMapping, setFinalMapping] = useState<Record<string, MappableField>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [progress, setProgress] = useState(0);
+
+  //  Prólogo da validação (preview)
+  const validationPreview = useMemo(() => {
+    if (currentStep !== 'validation' || csvData.length === 0) return null;
+    return ImportService.validateCSVData(csvData, finalMapping);
+  }, [csvData, finalMapping, currentStep]);
 
   const styles = createInventoryStyles;
 
@@ -63,7 +75,7 @@ export const ImportInventoryScreen = () => {
     setProgress(0);
   };
 
-  // ✅ Voltar para a Home
+  //  Voltar para a Home
   const handleGoBack = () => {
     if (currentStep !== 'initial') {
       // Se não estiver na etapa inicial, pergunta se quer cancelar
@@ -100,7 +112,7 @@ export const ImportInventoryScreen = () => {
         return;
       }
 
-      // ✅ Verificação mais clara de cancelamento
+      //  Verificação mais clara de cancelamento
       if (!fileResult.value || !fileResult.value.assets || fileResult.value.assets.length === 0) {
         return; // Usuário cancelou a seleção
       }
@@ -177,7 +189,7 @@ export const ImportInventoryScreen = () => {
     }
   };
 
-  const processInventory = async (validation: any) => {
+  const processInventory = async (validation: CSVValidationResult) => {
     try {
       setProgress(60);
       const items = ImportService.convertToAssetItems(csvData, finalMapping);
@@ -220,9 +232,11 @@ export const ImportInventoryScreen = () => {
   };
 
   // Renderizar tela de mapeamento
+  // Renderizar tela de mapeamento
   const renderMappingStep = () => (
     <View style={styles.stepContainer}>
       <Text style={styles.stepTitle}>Mapear Colunas</Text>
+
       <Text style={styles.stepDescription}>
         Associe as colunas do CSV aos campos do sistema. O campo{' '}
         <Text style={{ fontWeight: 'bold', color: colors.accent }}>Código</Text> é obrigatório.
@@ -230,14 +244,26 @@ export const ImportInventoryScreen = () => {
 
       <ScrollView style={styles.mappingList} showsVerticalScrollIndicator={false}>
         {columnMapping.map((item, index) => (
-          <View key={index} style={styles.mappingItem}>
+          <View key={`${item.csvHeader}-${index}`} style={styles.mappingItem}>
             <Text style={styles.csvHeader}>{item.csvHeader}</Text>
-            <View style={styles.mappingControls}>
+
+            {/* Scroll horizontal dos botões */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.mappingControls}
+            >
+              {/* Ignorar */}
               <TouchableOpacity
                 style={[styles.fieldButton, !item.mappedField && styles.fieldButtonActive]}
                 onPress={() => {
                   const newMapping = [...columnMapping];
-                  newMapping[index] = { ...newMapping[index], mappedField: undefined };
+
+                  newMapping[index] = {
+                    ...newMapping[index],
+                    mappedField: undefined,
+                  };
+
                   setColumnMapping(newMapping);
                 }}
               >
@@ -251,6 +277,7 @@ export const ImportInventoryScreen = () => {
                 </Text>
               </TouchableOpacity>
 
+              {/* Campos fixos */}
               {MAPPABLE_FIELDS.map((field) => (
                 <TouchableOpacity
                   key={field}
@@ -260,7 +287,12 @@ export const ImportInventoryScreen = () => {
                   ]}
                   onPress={() => {
                     const newMapping = [...columnMapping];
-                    newMapping[index] = { ...newMapping[index], mappedField: field };
+
+                    newMapping[index] = {
+                      ...newMapping[index],
+                      mappedField: field,
+                    };
+
                     setColumnMapping(newMapping);
                   }}
                 >
@@ -274,7 +306,36 @@ export const ImportInventoryScreen = () => {
                   </Text>
                 </TouchableOpacity>
               ))}
-            </View>
+
+              {/* Campo Extra */}
+              <TouchableOpacity
+                style={[
+                  styles.fieldButton,
+                  item.mappedField === item.csvHeader && styles.fieldButtonActive,
+                ]}
+                onPress={() => {
+                  const newMapping = [...columnMapping];
+
+                  newMapping[index] = {
+                    ...newMapping[index],
+                    mappedField: item.csvHeader,
+                  };
+
+                  setColumnMapping(newMapping);
+                }}
+              >
+                <Text
+                  style={[
+                    styles.fieldButtonText,
+                    item.mappedField === item.csvHeader && styles.fieldButtonTextActive,
+                  ]}
+                >
+                  + Extra
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
+
+            {/* Confiança */}
             {item.confidence > 0 && item.confidence < 100 && (
               <Text style={styles.confidenceText}>Confiança: {item.confidence}%</Text>
             )}
@@ -294,13 +355,25 @@ export const ImportInventoryScreen = () => {
       <Text style={styles.stepTitle}>Validar Dados</Text>
 
       <View style={styles.statsCard}>
-        <Text style={styles.statsTitle}>Resumo</Text>
         <Text style={styles.statsText}>Total de linhas: {csvData.length}</Text>
         <Text style={styles.statsText}>Colunas mapeadas: {Object.keys(finalMapping).length}</Text>
-        <Text style={styles.statsText}>
-          Itens válidos: {csvData.length}
-          {csvData.length > 0 && ` (amostra abaixo)`}
-        </Text>
+        {validationPreview ? (
+          <>
+            <Text style={styles.statsText}>Itens válidos: {validationPreview.validRows}</Text>
+            {validationPreview.errorRows > 0 && (
+              <Text style={[styles.statsText, { color: colors.accentErr }]}>
+                Erros: {validationPreview.errorRows}
+              </Text>
+            )}
+            {validationPreview.warnings.length > 0 && (
+              <Text style={[styles.statsText, { color: colors.accentWarn }]}>
+                Avisos: {validationPreview.warnings.length}
+              </Text>
+            )}
+          </>
+        ) : (
+          <Text style={styles.statsText}>Carregando validação…</Text>
+        )}
       </View>
 
       <Text style={styles.previewTitle}>Preview dos dados:</Text>
@@ -346,7 +419,7 @@ export const ImportInventoryScreen = () => {
       {/* Header com botão de voltar */}
       <View style={styles.header}>
         <TouchableOpacity onPress={handleGoBack} style={styles.backBtn}>
-          <Text style={styles.backBtnText}>←</Text>
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.title}>Importar CSV</Text>
         <View style={{ width: 36 }} />

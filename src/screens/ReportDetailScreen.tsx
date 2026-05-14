@@ -54,7 +54,7 @@ export const ReportDetailScreen = () => {
   const [report, setReport] = useState<InventoryReport | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
- const schemaRef = useRef<InventorySchema | undefined>(undefined);
+  const schemaRef = useRef<InventorySchema | undefined>(undefined);
 
   //  Carregamento
   const loadReport = useCallback(async () => {
@@ -152,7 +152,7 @@ export const ReportDetailScreen = () => {
     Alert.alert('Exportar CSV', 'Selecione o tipo de relatório que deseja exportar:', [
       { text: 'Cancelar', style: 'cancel' },
       {
-        text: '📋 Encontrados',
+        text: ' Encontrados',
         onPress: async () => {
           setIsExporting(true);
           try {
@@ -170,7 +170,7 @@ export const ReportDetailScreen = () => {
         },
       },
       {
-        text: '⚠️ Não encontrados',
+        text: ' Não encontrados',
         onPress: async () => {
           setIsExporting(true);
           try {
@@ -188,7 +188,7 @@ export const ReportDetailScreen = () => {
         },
       },
       {
-        text: '📊 Completo',
+        text: ' Completo',
         onPress: async () => {
           setIsExporting(true);
           try {
@@ -381,12 +381,14 @@ export const ReportDetailScreen = () => {
             <View style={styles.chartDark}>
               <SvgXml xml={timelineSvg} width="100%" height={110} />
             </View>
-            {overall.durationMinutes != null && overall.durationMinutes > 0 && report.scanTimeline.length > 1 && (
-              <Text style={styles.chartCaption}>
-                Média: {((overall.durationMinutes * 60) / report.scanTimeline.length).toFixed(0)}s
-                por item
-              </Text>
-            )}
+            {overall.durationMinutes != null &&
+              overall.durationMinutes > 0 &&
+              report.scanTimeline.length > 1 && (
+                <Text style={styles.chartCaption}>
+                  Média: {((overall.durationMinutes * 60) / report.scanTimeline.length).toFixed(0)}s
+                  por item
+                </Text>
+              )}
           </Section>
         )}
 
@@ -414,7 +416,12 @@ export const ReportDetailScreen = () => {
         <Section title={`Itens não encontrados (${report.notFoundItems.length})`}>
           {report.notFoundItems.length === 0 ? (
             <View style={styles.allFoundBanner}>
-              <Ionicons name="checkmark-circle" size={20} color={colors.success} style={{ marginRight: 6 }} />
+              <Ionicons
+                name="checkmark-circle"
+                size={20}
+                color={colors.success}
+                style={{ marginRight: 6 }}
+              />
               <Text style={styles.allFoundText}>Todos os itens foram localizados!</Text>
             </View>
           ) : (
@@ -472,30 +479,32 @@ const Section = React.memo(({ title, children }: { title: string; children: Reac
   </View>
 ));
 
-const StatCard = React.memo(({
-  label,
-  value,
-  accent,
-  warn,
-}: {
-  label: string;
-  value: number;
-  accent?: boolean;
-  warn?: boolean;
-}) => (
-  <View style={styles.statCard}>
-    <Text style={styles.statLabel}>{label}</Text>
-    <Text
-      style={[
-        styles.statValue,
-        accent && styles.statValueAccent,
-        warn && value > 0 && styles.statValueWarn,
-      ]}
-    >
-      {value}
-    </Text>
-  </View>
-));
+const StatCard = React.memo(
+  ({
+    label,
+    value,
+    accent,
+    warn,
+  }: {
+    label: string;
+    value: number;
+    accent?: boolean;
+    warn?: boolean;
+  }) => (
+    <View style={styles.statCard}>
+      <Text style={styles.statLabel}>{label}</Text>
+      <Text
+        style={[
+          styles.statValue,
+          accent && styles.statValueAccent,
+          warn && value > 0 && styles.statValueWarn,
+        ]}
+      >
+        {value}
+      </Text>
+    </View>
+  )
+);
 
 const MetaItem = React.memo(({ label, value }: { label: string; value: string }) => (
   <View style={styles.metaItem}>

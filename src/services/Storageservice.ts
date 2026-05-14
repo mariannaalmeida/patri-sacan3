@@ -7,10 +7,11 @@ import {
   InventoryStats,
   Result,
   InventorySchema,
+  isScannedItem,
 } from '../types/types';
 import { toISODate } from '../utils/dateUtils';
 import { handleServiceError } from '../utils/errorUtils';
-import { isScannedItem } from '../types/types';
+import { generateBasicSchema } from '../utils/schemaUtils';
 
 const STORAGE_KEYS = {
   INVENTORIES_INDEX: '@patri_sacan3:inventories_index',
@@ -19,14 +20,6 @@ const STORAGE_KEYS = {
 } as const;
 
 export class StorageService {
-  private static readonly DEFAULT_METADATA: InventoryMetadata = {
-    id: '0',
-    name: 'Novo Inventário',
-    importDate: toISODate(new Date()),
-    totalItems: 0,
-    status: 'active',
-  };
-
   // Gerador de ID único
   static generateInventoryId(): string {
     const timestamp = Date.now();
@@ -339,7 +332,7 @@ export class StorageService {
           totalItems: total,
           scannedItems: scannedCount,
           progress: total > 0 ? Math.round((scannedCount / total) * 100) : 0,
-          lastModified, // ✅ Agora é ISODateString
+          lastModified, //  ISODateString
         };
       },
       'STORAGE_READ_FAILED',
@@ -363,11 +356,8 @@ export class StorageService {
           status: 'active',
           lastModified: now, //  ISODateString
         },
-        // NOVO: Adicionado o schema padrão para satisfazer a interface Inventory
-        schema: {
-          version: '1.0',
-          fields: [],
-        },
+        //  Adicionado o schema padrão para satisfazer a interface Inventory
+         schema: generateBasicSchema(items),
       };
 
       const saveResult = await this.saveInventory(newInventory);
